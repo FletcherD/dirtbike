@@ -28,7 +28,7 @@ const store = {
 };
 function settings() {
   return {track: $('track').value, seed: $('seed').value | 0, bike: $('bike').value, physics: $('physics').value,
-    manual: $('trans').value === 'manual', ghosts: $('ghosts').checked, sound: $('sound').checked};
+    manual: $('trans').value === 'manual', ghosts: $('ghosts').checked, sound: $('sound').checked, biome: $('biome').value};
 }
 function trackId(s) { return s.track === 'random' ? 'seed:' + (s.seed >>> 0) : s.track; }
 function bestKey(s) { return `best|${trackId(s)}|${s.physics}|${s.bike}${s.bike === 'custom' ? ':' + customHash() : ''}`; }
@@ -90,62 +90,137 @@ async function loadTrack(s) {
   // parallax hills
   let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   t.hills = [0, 1].map(layer => { const h = []; for (let i = 0; i < 64; i++) h.push(rnd()); return h; });
-  t.decor = buildDecor(t.pts, id);
+  t.biome = BIOMES[biomeFor(id, s.biome)];
+  t.decor = buildDecor(t.pts, id, t.biome);
   return t;
 }
 
-// ---------------------------------------------------------------- ground decoration
-// Imitates the original's scenery: a speckled crust of dirt and grass along the surface (the original pastes a
-// random 3x4 px slice of grass/dirt texture at every track point), plus plants, bushes and cacti standing on it.
-// Generated once per track (seeded by its id) in chunks so only visible chunks are drawn. Only points before the
-// lap seam (n-100) get decoration; the next lap's copy supplies the duplicated stretch after it.
-const DIRT_COLS = ['#3a2410', '#5c3a19', '#a0703c', '#2a1a0b'];
-const CRUST_COLS = ['#2f6b1e', '#4c8f2a', '#6b4520'];
-const GRASS_COLS = ['#2e7d32', '#4caf50', '#7bc043', '#1b5e20'];
+// ---------------------------------------------------------------- biomes & ground decoration
+// Imitates the original's scenery: a speckled crust along the surface (the original pastes a random 3x4 px slice
+// of grass/dirt texture at every track point) plus plants standing on it. Each biome sets the palette, which
+// surface layers exist and which plants grow (types with their spacing in track points, lo..hi).
+// Decoration is generated once per track (seeded by its id) in chunks so only visible chunks are drawn. Only
+// points before the lap seam (n-100) are decorated; the next lap's copy supplies the stretch after it.
+const BIOMES = {
+  grassland: {
+    sky: ['#5ea8ef', '#cfe9ff'], hills: ['#9fb7c9', '#86a58a'], ground: ['#8a5f33', '#4e3519'], edge: ['#5b8f2e', 90],
+    speckles: ['#3a2410', '#5c3a19', '#a0703c', '#2a1a0b'], crust: ['#2f6b1e', '#4c8f2a', '#6b4520'],
+    blades: ['#2e7d32', '#4caf50', '#7bc043', '#1b5e20'],
+    items: [['plant', 40, 220], ['bush', 150, 500], ['creosote', 300, 900]],
+  },
+  desert: {
+    sky: ['#6fa9df', '#f6dfb8'], hills: ['#d9b48f', '#c99a66'], ground: ['#d8b071', '#9c6a35'], edge: ['#b98a50', 50],
+    speckles: ['#8a6a45', '#f2dcaa', '#6e5338', '#b88a55'], crust: ['#c49a60', '#e8c88f', '#a87d48'],
+    blades: null,
+    items: [['rock', 60, 260], ['creosote', 80, 300], ['ocotillo', 250, 800], ['cactus', 300, 900], ['barrel', 200, 700]],
+  },
+};
+function biomeFor(id, choice) {
+  if (choice !== 'auto') return choice;
+  let h = 7;
+  for (const ch of id) h = (h * 131 + ch.charCodeAt(0)) >>> 0;
+  return h % 2 ? 'desert' : 'grassland';
+}
 const CHUNK = 100;
-function buildDecor(pts, id) {
+function seededRng(id) {
   let seed = 0;
   for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
-  const between = (lo, hi) => lo + rnd() * (hi - lo);
+  return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+function buildDecor(pts, id, bio) {
+  const rnd = seededRng(id), between = (lo, hi) => lo + rnd() * (hi - lo), pick = a => Math.floor(rnd() * a.length);
   const n = pts.length, end = n - 100, chunks = [];
   for (let c0 = 0; c0 < end; c0 += CHUNK) {
     const c1 = Math.min(end, c0 + CHUNK);
-    const ch = {x0: pts[c0][0] - 1500, x1: pts[c1][0] + 1500, dirt: DIRT_COLS.map(() => new Path2D()),
-      crust: CRUST_COLS.map(() => new Path2D()), grass: GRASS_COLS.map(() => new Path2D()), items: []};
+    const ch = {x0: pts[c0][0] - 1500, x1: pts[c1][0] + 1500, speckles: bio.speckles.map(() => new Path2D()),
+      crust: bio.crust.map(() => new Path2D()), blades: bio.blades ? bio.blades.map(() => new Path2D()) : [], items: []};
     for (let i = c0; i < c1; i++) {
       const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
       const at = u => [ax + (bx - ax) * u, ay + (by - ay) * u];
-      for (let k = 0; k < 3; k++) {                       // dirt speckles, denser near the surface
+      for (let k = 0; k < 3; k++) {                       // speckles, denser near the surface
         const [x, y] = at(rnd()), d = 60 + Math.pow(rnd(), 2.2) * 2200, sz = between(25, 60);
-        ch.dirt[Math.floor(rnd() * DIRT_COLS.length)].rect(x, y - d, sz, sz);
+        ch.speckles[pick(bio.speckles)].rect(x, y - d, sz, sz);
       }
       for (let k = 0; k < 3; k++) {                       // crust just under the surface
         const [x, y] = at(rnd()), sz = between(25, 45);
-        ch.crust[Math.floor(rnd() * CRUST_COLS.length)].rect(x, y - between(20, 140), sz, sz);
+        ch.crust[pick(bio.crust)].rect(x, y - between(20, 140), sz, sz);
       }
-      for (let k = 0; k < 2; k++) {                       // grass blades poking up
+      if (bio.blades) for (let k = 0; k < 2; k++) {       // grass blades poking up
         const [x, y] = at(rnd());
-        ch.grass[Math.floor(rnd() * GRASS_COLS.length)].rect(x, y - 30, between(18, 28), between(60, 170));
+        ch.blades[pick(bio.blades)].rect(x, y - 30, between(18, 28), between(60, 170));
       }
     }
     chunks.push(ch);
   }
-  // plants / bushes / cacti on the surface, at random point intervals (denser than the original's)
-  for (const [type, lo, hi] of [['plant', 40, 220], ['bush', 150, 500], ['cactus', 350, 1100]]) {
+  for (const [type, lo, hi] of bio.items) {
     for (let i = Math.floor(between(lo, hi)); i < end; i += Math.floor(between(lo, hi))) {
-      chunks[Math.floor(i / CHUNK)].items.push({type, x: pts[i][0], y: pts[i][1], s: between(0.75, 1.25),
-        r: [rnd(), rnd(), rnd(), rnd()]});
+      const it = {type, x: pts[i][0], y: pts[i][1], s: between(0.75, 1.25), r: [rnd(), rnd(), rnd(), rnd()]};
+      if (L_PLANTS[type]) it.shape = lPlant(L_PLANTS[type], rnd);
+      chunks[Math.floor(i / CHUNK)].items.push(it);
     }
   }
   return chunks;
 }
+
+// Stochastic L-system plants. rules: symbol -> [[weight, replacement], ...]. Turtle: F = draw forward,
+// + / - = turn by angle (with jitter), [ ] = push/pop (branches get shorter), 'A' left at a branch tip can get a
+// flower. Geometry is built once per plant into a Path2D in mm, origin at the base, growing up (+y).
+const L_PLANTS = {
+  creosote: {  // spindly desert/scrub bush: many thin forking twigs
+    axiom: '[-X][X][+X]', iters: 4, angle: 24, angleJit: 12, len: 90, lenJit: 0.35, shrink: 0.9, width: 26,
+    color: ['#6f7a3c', '#7d6a3e', '#5f6e35'], bend: 6,
+    rules: {X: [[0.45, 'F[+X][-X]FX'], [0.3, 'F[-X]FX'], [0.25, 'F[+X]FX']], F: [[0.6, 'FF'], [0.4, 'F']]},
+  },
+  ocotillo: {  // long, wavy, nearly unbranched stems fanning out from the base; red flowers at some tips
+    axiom: '[--A][-A][A][+A][++A]', iters: 17, angle: 14, angleJit: 5, len: 120, lenJit: 0.3, shrink: 0.95, width: 30,
+    color: ['#5e5a3a', '#4f5934'], bend: 9, tip: '#d8402a',
+    rules: {A: [[0.82, 'FA'], [0.1, 'F[+B]A'], [0.08, 'F[-B]A']], B: [[1, 'FF']]},
+  },
+};
+function lPlant(sp, rnd) {
+  let str = sp.axiom;
+  for (let i = 0; i < sp.iters; i++) {
+    let out = '';
+    for (const c of str) {
+      const opts = sp.rules[c];
+      if (!opts) { out += c; continue; }
+      let u = rnd() * opts.reduce((a, o) => a + o[0], 0);
+      const o = opts.find(o => (u -= o[0]) <= 0) || opts[opts.length - 1];
+      out += o[1];
+    }
+    str = out.length > 6000 ? str : out; // keep plants bounded
+  }
+  const path = new Path2D(), tips = new Path2D(), stack = [];
+  let x = 0, y = 0, a = 90, len = sp.len;
+  path.moveTo(0, 0);
+  for (const c of str) {
+    if (c === 'F') {
+      a += (rnd() - 0.5) * sp.bend;
+      const l = len * (1 + (rnd() - 0.5) * 2 * sp.lenJit);
+      x += Math.cos(a * Math.PI / 180) * l; y += Math.sin(a * Math.PI / 180) * l;
+      path.lineTo(x, y);
+    } else if (c === '+' || c === '-') {
+      a += (c === '+' ? 1 : -1) * (sp.angle + (rnd() - 0.5) * 2 * sp.angleJit);
+    } else if (c === '[') {
+      stack.push([x, y, a, len]); len *= sp.shrink;
+    } else if (c === ']') {
+      if (sp.tip && rnd() < 0.35) { tips.moveTo(x + 40, y); tips.arc(x, y, 40, 0, 7); }
+      [x, y, a, len] = stack.pop(); path.moveTo(x, y);
+    }
+  }
+  return {path, tips, color: sp.color[Math.floor(rnd() * sp.color.length)], width: sp.width, tip: sp.tip};
+}
 function drawItem(it) {
   const {x, y, s, r} = it;
   cx.lineCap = 'round'; cx.lineJoin = 'round';
-  if (it.type === 'cactus') {
+  if (it.shape) {
+    cx.save(); cx.translate(x, y - 40); cx.scale(s, s);
+    cx.strokeStyle = it.shape.color; cx.lineWidth = it.shape.width; cx.stroke(it.shape.path);
+    if (it.shape.tip) { cx.fillStyle = it.shape.tip; cx.fill(it.shape.tips); }
+    cx.restore();
+  } else if (it.type === 'cactus') {
     const h = 1900 * s + r[0] * 800;
-    cx.strokeStyle = '#3f8a3c'; cx.lineWidth = 260 * s;
+    cx.strokeStyle = '#4b8a46'; cx.lineWidth = 260 * s;
     cx.beginPath(); cx.moveTo(x, y - 100); cx.lineTo(x, y + h);
     const arms = r[1] < 0.3 ? 1 : 2;
     for (let k = 0; k < arms; k++) {
@@ -155,6 +230,18 @@ function drawItem(it) {
     cx.stroke();
     cx.strokeStyle = 'rgba(0,0,0,0.18)'; cx.lineWidth = 30 * s;          // ribs
     cx.beginPath(); cx.moveTo(x - 50 * s, y); cx.lineTo(x - 50 * s, y + h - 60); cx.moveTo(x + 50 * s, y); cx.lineTo(x + 50 * s, y + h - 60); cx.stroke();
+  } else if (it.type === 'barrel') {
+    const w = (220 + 120 * r[0]) * s, h = (260 + 200 * r[1]) * s;
+    cx.fillStyle = '#5a8f4a'; cx.beginPath(); cx.ellipse(x, y + h * 0.45, w, h, 0, 0, 7); cx.fill();
+    cx.strokeStyle = 'rgba(0,0,0,0.2)'; cx.lineWidth = 22 * s; cx.beginPath();
+    for (const f of [-0.5, 0, 0.5]) cx.ellipse(x, y + h * 0.45, w * Math.abs(f) + 1, h, 0, 0, 7);
+    cx.stroke();
+    if (r[2] < 0.6) { cx.fillStyle = r[3] < 0.5 ? '#e8b92f' : '#d8402a'; cx.beginPath(); cx.arc(x, y + h * 1.4, 70 * s, 0, 7); cx.fill(); }
+  } else if (it.type === 'rock') {
+    const w = (150 + 350 * r[0]) * s, h = (90 + 220 * r[1]) * s;
+    cx.fillStyle = r[2] < 0.5 ? '#9c8b74' : '#86745e'; cx.beginPath();
+    cx.moveTo(x - w, y - 60); cx.lineTo(x - w * 0.8, y + h * 0.6); cx.lineTo(x - w * 0.2 * r[3], y + h);
+    cx.lineTo(x + w * 0.6, y + h * 0.8); cx.lineTo(x + w, y - 60); cx.closePath(); cx.fill();
   } else if (it.type === 'bush') {
     const blobs = 5 + Math.floor(r[0] * 3);
     for (let k = 0; k < blobs; k++) {
@@ -380,10 +467,11 @@ function ghostAt(g, rt) {
   return a.map((v, j) => j < 6 ? v + (b[j] - v) * u : v);
 }
 function drawBackground(W, H, camX, camY) {
-  const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#5ea8ef'); g.addColorStop(1, '#cfe9ff');
+  const bio = track ? track.biome : BIOMES.grassland;
+  const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, bio.sky[0]); g.addColorStop(1, bio.sky[1]);
   cx.fillStyle = g; cx.fillRect(0, 0, W, H);
   if (!track) return;
-  [[0.05, '#9fb7c9', 0.55, 160], [0.12, '#86a58a', 0.68, 110]].forEach(([par, col, base, amp], li) => {
+  [[0.05, bio.hills[0], 0.55, 160], [0.12, bio.hills[1], 0.68, 110]].forEach(([par, col, base, amp], li) => {
     const h = track.hills[li], seg = W / 6;
     const off = (camX * par / 50) % seg, start = Math.floor(camX * par / 50 / seg);
     cx.fillStyle = col; cx.beginPath(); cx.moveTo(0, H);
@@ -409,7 +497,8 @@ function render(ms) {
   drawBackground(W, H, camX, race.camY);
   cx.setTransform(scale, 0, 0, -scale, W * 0.42 - camX * scale, H * 0.58 + race.camY * scale);
   const dirt = cx.createLinearGradient(0, race.camY + 4000, 0, race.camY - 8000);
-  dirt.addColorStop(0, '#8a5f33'); dirt.addColorStop(1, '#4e3519');
+  const bio = track.biome;
+  dirt.addColorStop(0, bio.ground[0]); dirt.addColorStop(1, bio.ground[1]);
   const viewHalf = W / scale;
   for (const k of [-1, 0, 1]) { // previous/next lap copies so the course continues past both ends
     const ox = k * track.lapLength, lo = camX - viewHalf - ox, hi = camX + viewHalf - ox;
@@ -418,11 +507,11 @@ function render(ms) {
     for (const c of vis) c.items.forEach(drawItem);                     // stand on the surface, base hidden by ground
     cx.fillStyle = dirt; cx.fill(track.path);
     for (const c of vis) {
-      c.dirt.forEach((p, j) => { cx.fillStyle = DIRT_COLS[j]; cx.fill(p); });
-      c.crust.forEach((p, j) => { cx.fillStyle = CRUST_COLS[j]; cx.fill(p); });
+      c.speckles.forEach((p, j) => { cx.fillStyle = bio.speckles[j]; cx.fill(p); });
+      c.crust.forEach((p, j) => { cx.fillStyle = bio.crust[j]; cx.fill(p); });
     }
-    cx.strokeStyle = '#5b8f2e'; cx.lineWidth = 90; cx.lineJoin = 'round'; cx.stroke(track.edge);
-    for (const c of vis) c.grass.forEach((p, j) => { cx.fillStyle = GRASS_COLS[j]; cx.fill(p); });
+    cx.strokeStyle = bio.edge[0]; cx.lineWidth = bio.edge[1]; cx.lineJoin = 'round'; cx.stroke(track.edge);
+    for (const c of vis) c.blades.forEach((p, j) => { cx.fillStyle = bio.blades[j]; cx.fill(p); });
     cx.restore();
   }
   // lap line (crossing pts[n-40] wraps the bike back by one lap length, so draw it at both places)
@@ -489,7 +578,7 @@ function updateMenu() {
   $('desc').textContent = desc;
   const b = store.get(bestKey(s), null);
   $('best').textContent = b ? `${(b.time / 1000).toFixed(3)} s` : '–';
-  for (const k of ['track', 'seed', 'bike', 'physics', 'trans', 'ghosts', 'sound']) {
+  for (const k of ['track', 'seed', 'bike', 'physics', 'trans', 'biome', 'ghosts', 'sound']) {
     const el = $(k); store.set('ui.' + k, el.type === 'checkbox' ? el.checked : el.value);
   }
 }
@@ -499,7 +588,7 @@ function initMenu() {
   sel.add(new Option("Beginner's Track (generated)", 'beginner'));
   sel.add(new Option("Expert's Track (generated)", 'expert'));
   sel.add(new Option('Random track…', 'random'));
-  for (const k of ['track', 'seed', 'bike', 'physics', 'trans', 'ghosts', 'sound']) {
+  for (const k of ['track', 'seed', 'bike', 'physics', 'trans', 'biome', 'ghosts', 'sound']) {
     const el = $(k), v = store.get('ui.' + k, null);
     if (v !== null) el.type === 'checkbox' ? (el.checked = v) : (el.value = v);
     el.addEventListener('change', updateMenu);

@@ -178,8 +178,11 @@ physics core, transmission, ghosts/sound/music. Best times + your best ghost in 
 track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider modelled on sprite 143 that leans like the original
 sprites (`riderLean`: 0 near level/inverted, up to 22° forward when nose-up / back when nose-down; torso pivots at
 sliding hips, two-bone `joint` keeps feet on the pegs and hands on the bars), parallax hills, lap line. Ground
-decoration (`buildDecor`, seeded per track, chunked by 100 points and culled to the view): dirt speckles, a
-grass/dirt crust and grass blades along the surface, plus plants, bushes and cacti (`drawItem`) standing on it. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
+decoration (`buildDecor`, seeded per track, chunked by 100 points and culled to the view) follows a biome
+(`BIOMES`: palette, surface layers, plant types with spacing; menu "Scenery", auto = hash of the track id):
+grassland = speckles, grass crust and blades, plants, puffy bushes, creosote; desert = sand with pebble speckles,
+rocks, saguaro/barrel cacti and L-system plants. `lPlant` expands a stochastic L-system (`L_PLANTS`: creosote,
+ocotillo; F/+/-/[ ] turtle with angle/length jitter, flowers at some tips) into a Path2D once per plant. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
 
 ## Repository and deployment
 
