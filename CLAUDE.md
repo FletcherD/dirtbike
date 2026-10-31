@@ -40,6 +40,9 @@ via repeatable `--set key=value` (keys = `Db2Config` fields).
 - `tools/ablate_improved.py` — tracking error with each improved-core change enabled alone (feel check).
 - `tools/calibrate_mu.py` — |drive|/|N| distribution along human replays (basis for the improved core's `mu`).
 - `tools/bench.py` — planner over tracks × settings × cores.
+- `tools/extract_images.py` — all PICTs → `work/images/pict/`, masked sprites → `work/images/sprites/`, Finder icons
+  → `work/images/icons/`, gallery `work/images/index.html`. 1-bit bitmap PICTs (the masks, v1 and v2) are decoded
+  in-script (ImageMagick misreads them); colour PICTs go through ImageMagick `convert`.
 - `tools/extract_sounds.py` — `snd ` resources → `work/sounds/snd<id>.wav` (MACE 3:1 decoded by ffmpeg via AIFF-C).
 - `tools/build_web.py [--only wasm tracks sounds]` — compile `sim/webapi.c`+cores with emcc (apt `emscripten`) into
   `web/physics.js` + `physics.wasm`, export sample tracks + ghosts to `web/tracks/` and copy sound effects to
@@ -57,6 +60,11 @@ CODE resources also exist but are unused here. Virtual calls go through `__ptr_g
 `lwz r12,slot(vptr)`; vptr is the first word of objects. Bike vtable `0x10027ac8` (+0x1c Reset, +0x20
 PhysicsStep, +0x2c SetFinished, +0x30 UpdateThrottle); ComputerBike `0x10027bac`; LocalBike overrides
 +0x20/+0x30 (`0x10017c40`, `0x10017cc8`). Strings and TVectors are in the data section; `tools/pefdata.py`.
+Images (`PICT`): 128–157 bike+rider sprites, one per angle bucket (degree→index table built in `InitTrigTables`,
+level = 143), drawn at CG + per-index offsets (`g_game+0xf8` x / `+0x170` y, mm, set in `FUN_1000f574`), 30 mm
+per sprite pixel; 158–165 wheel sprites (brown/blue/red/yellow, two frames each), centred on the wheel hubs;
+masks are id+1000 (black = draw); 180 scenery strip (start sign, cactus); 201 about-box photo; 1000 title screen;
+2000/2001 background panoramas. Bike drawing: `FUN_100147c8`.
 Sounds (`snd `): 128 engine loop (playback rate set to rpm+40000, presumably /65536), 129 go, 130 crash,
 131 "keep it up" (lap), 132 bottom out, 133 "whoa" (full rotation), 134 hooray, 200 music (starts with the countdown).
 
@@ -154,7 +162,8 @@ block (`PARAM_NAMES`) into wasm memory, calls `_web_new_race(improved, 0)`, then
 game.js / enum in webapi.c). Events (go, crash, lap, flip, bottom-out, finish) are detected by diffing states.
 Menu: track (samples, generated Beginner/Expert, random seed), bike (Expert/Beginner/Custom via the editor),
 physics core, transmission, ghosts/sound/music. Best times + your best ghost in localStorage per
-track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider, parallax hills, lap line.
+track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider modelled on sprite 143, parallax hills, lap
+line. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
 
 ## Repository and deployment
 

@@ -3,7 +3,13 @@ name = "dirtbike"
 version = "0.1.0"
 description = "Reverse-engineered Dirt Bike 4.3 physics harness and planner"
 requires-python = ">=3.11"
-dependencies = ["numpy", "matplotlib", "tqdm"]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "tqdm",
+    "rsrcfork>=1.8.0",
+    "pillow>=13.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]

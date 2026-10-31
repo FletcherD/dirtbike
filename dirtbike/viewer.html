@@ -127,12 +127,16 @@ function draw() {
   const W = cv.width = cv.clientWidth, H = cv.height = cv.clientHeight;
   const f = F[i], scale = (+document.getElementById('zoom').value)/100 * W/16000;
   cx.setTransform(scale,0,0,-scale, W/2 - f[K.x]*scale, H*0.55 + f[K.y]*scale);
-  cx.fillStyle = '#7a5530';
-  cx.beginPath(); cx.moveTo(P[0][0], -1e6);
-  for (let j=0;j<n;j++) cx.lineTo(P[j][0], P[j][1]);
-  cx.lineTo(P[n-1][0], -1e6); cx.closePath(); cx.fill();
-  cx.strokeStyle='#3a2a10'; cx.lineWidth=2/scale; cx.beginPath();
-  for (let j=0;j<n;j++) cx[j?'lineTo':'moveTo'](P[j][0], P[j][1]); cx.stroke();
+  const lapDx = P[n-100][0] - P[0][0], lapDy = P[n-100][1] - P[0][1];
+  for (const k of [-1, 0, 1]) { // previous/next lap copies: the world repeats every lap
+    const ox = k * lapDx, oy = k * lapDy;
+    cx.fillStyle = '#7a5530';
+    cx.beginPath(); cx.moveTo(P[0][0] + ox, -1e6);
+    for (let j=0;j<n;j++) cx.lineTo(P[j][0] + ox, P[j][1] + oy);
+    cx.lineTo(P[n-1][0] + ox, -1e6); cx.closePath(); cx.fill();
+    cx.strokeStyle='#3a2a10'; cx.lineWidth=2/scale; cx.beginPath();
+    for (let j=0;j<n;j++) cx[j?'lineTo':'moveTo'](P[j][0] + ox, P[j][1] + oy); cx.stroke();
+  }
   const fr = D.bike.front_radius, rr = D.bike.rear_radius;
   for (const g of (D.ghosts||[])) {
     const s = ghostAt(g, f[K.race_time]); if (!s) continue;

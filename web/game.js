@@ -84,7 +84,9 @@ async function loadTrack(s) {
   const edge = new Path2D();
   t.pts.forEach((q, i) => i ? edge.lineTo(q[0], q[1]) : edge.moveTo(q[0], q[1]));
   t.path = path; t.edge = edge;
+  // the world repeats every lap: crossing pts[n-40] moves the bike back by (pts[n-100] - pts[0])
   t.lapLength = t.pts[t.pts.length - 100][0] - t.pts[0][0];
+  t.lapRise = t.pts[t.pts.length - 100][1] - t.pts[0][1];
   // parallax hills
   let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   t.hills = [0, 1].map(layer => { const h = []; for (let i = 0; i < 64; i++) h.push(rnd()); return h; });
@@ -307,8 +309,12 @@ function render(ms) {
   cx.setTransform(scale, 0, 0, -scale, W * 0.42 - camX * scale, H * 0.58 + race.camY * scale);
   const dirt = cx.createLinearGradient(0, race.camY + 4000, 0, race.camY - 8000);
   dirt.addColorStop(0, '#8a5f33'); dirt.addColorStop(1, '#4e3519');
-  cx.fillStyle = dirt; cx.fill(track.path);
-  cx.strokeStyle = '#5b8f2e'; cx.lineWidth = 90; cx.lineJoin = 'round'; cx.stroke(track.edge);
+  for (const k of [-1, 0, 1]) { // previous/next lap copies so the course continues past both ends
+    cx.save(); cx.translate(k * track.lapLength, k * track.lapRise);
+    cx.fillStyle = dirt; cx.fill(track.path);
+    cx.strokeStyle = '#5b8f2e'; cx.lineWidth = 90; cx.lineJoin = 'round'; cx.stroke(track.edge);
+    cx.restore();
+  }
   // lap line (crossing pts[n-40] wraps the bike back by one lap length, so draw it at both places)
   const lineX = track.pts[track.pts.length - 40][0];
   for (const lx of [lineX, lineX - track.lapLength]) {
@@ -348,7 +354,7 @@ function drawHud(st) {
   $('gear').textContent = st[S.ENGINE] ? (st[S.GEAR] ? st[S.GEAR] : 'N') : 'off';
   rpmC.fillStyle = '#333'; rpmC.fillRect(0, 0, 150, 12);
   rpmC.fillStyle = st[S.RPM] > 40000 ? '#ff7043' : '#ffca28'; rpmC.fillRect(0, 0, Math.max(0, Math.min(1, st[S.RPM] / TMAX)) * 150, 12);
-  $('speed').textContent = `${(st[S.VX] / 1e4 * 3.6).toFixed(0)} km/h`;
+  $('speed').textContent = `${Math.round(st[S.VX] / 1e4 * 3.6) || 0} km/h`;
 }
 function updateStatus() {
   if (!race) return;
