@@ -22,7 +22,7 @@ Two physics cores share tracks, bike parameters, controls and the planner:
 | `dirtbike/` | Python package (uv project): `formats.py` file loaders, `sim.py` ctypes wrapper (`core("original"/"improved")`, auto-builds `sim/build/libdbcore.so`), `planner.py`, `runio.py` (CLI helpers, run JSON), `viewer.html` (run viewer template) |
 | `tools/` | CLIs (below) and RE helpers: `appledouble.py`, `funcs.py` (grep/print functions in `ppc_decomp.c`), `pefdata.py` (vtables/doubles in the data section), `ghidra_scripts/` |
 | `runs/` | planner/sim outputs: `<name>.json` + `<name>.html` (self-contained viewer) |
-| `web/` | the browser game: `index.html`, `game.js` (hand-written); `tracks.js`, `sounds.js` (generated locally by `tools/build_web.py` from the original game files, committed); `physics.js` (wasm, generated, not committed — built by CI); `sounds/*.wav` (local, from `tools/extract_sounds.py`) |
+| `web/` | the browser game (static site): `index.html`, `game.js` (hand-written); `tracks/index.json` + `tracks/<track>.json` (points + high-score ghosts) and `sounds/<event>.wav`, generated locally by `tools/build_web.py` from the original game files and committed; `physics.js` + `physics.wasm` (generated, not committed — built by CI) |
 
 ## Tools
 
@@ -40,11 +40,11 @@ via repeatable `--set key=value` (keys = `Db2Config` fields).
 - `tools/ablate_improved.py` — tracking error with each improved-core change enabled alone (feel check).
 - `tools/calibrate_mu.py` — |drive|/|N| distribution along human replays (basis for the improved core's `mu`).
 - `tools/bench.py` — planner over tracks × settings × cores.
-- `tools/extract_sounds.py` — `snd ` resources → `web/sounds/*.wav` (MACE 3:1 decoded by ffmpeg via AIFF-C).
+- `tools/extract_sounds.py` — `snd ` resources → `work/sounds/snd<id>.wav` (MACE 3:1 decoded by ffmpeg via AIFF-C).
 - `tools/build_web.py [--only wasm tracks sounds]` — compile `sim/webapi.c`+cores with emcc (apt `emscripten`) into
-  `web/physics.js` (wasm embedded), export sample tracks + ghosts and sound effects (the original music, snd 200, is
-  deliberately not shipped). `--only wasm` needs no project deps (used by CI). Then open `web/index.html` directly
-  (works from file://) or serve `web/`.
+  `web/physics.js` + `physics.wasm`, export sample tracks + ghosts to `web/tracks/` and copy sound effects to
+  `web/sounds/<event>.wav` (the original music, snd 200, is deliberately not shipped). `--only wasm` needs no project
+  deps (used by CI). The game fetches its files, so serve it: `python3 -m http.server -d web`.
 - `tools/ghidra_reanalyze.sh` — apply `re/*.txt` to the Ghidra project, regenerate `work/ppc_decomp.c` + `work/ppc_listing.s`. Ghidra 12.2 in `~/opt/ghidra_12.2_PUBLIC`.
 
 Re-extracting from scratch: `unar` the .sit → `hmount`/`hcopy -m` (hfsutils) the `.sea` out of the HFS image →
@@ -147,7 +147,8 @@ play/pause, arrows step frames (shift ×10).
 
 ## Web game (`web/`)
 
-`game.js` loads `physics.js` (MODULARIZE, `DirtBikePhysics()`), writes track points / the 27-int bike parameter
+`game.js` loads `physics.js` (MODULARIZE, `DirtBikePhysics()`, fetches `physics.wasm`) and `tracks/index.json`
+(menu: names, descriptions, laps, record times; track JSON fetched on race start, sounds on first race), writes track points / the 27-int bike parameter
 block (`PARAM_NAMES`) into wasm memory, calls `_web_new_race(improved, 0)`, then per animation frame
 `_web_set_throttle`, `_web_advance(elapsed ms × 10)` and reads `_web_state()` (26 doubles, index map `S` in
 game.js / enum in webapi.c). Events (go, crash, lap, flip, bottom-out, finish) are detected by diffing states.

@@ -56,7 +56,7 @@ button{cursor:pointer}button.go{background:#2e7d32;font-size:18px;padding:6px 22
    <label><input type="checkbox" id="ghosts" checked> ghosts</label>
    <label><input type="checkbox" id="sound" checked> sound</label></div>
  <div class="row"><label class="l">Best</label><span id="best">–</span></div>
- <div class="row"><button class="go" id="start">Ride! (Enter)</button></div>
+ <div class="row"><button class="go" id="start" disabled>Loading…</button></div>
  <div id="help">Throttle is the <b>height of the mouse</b>: top = full throttle, below the dashed line = brake.
  Up/Down keys also work. In the air, throttle up lifts the nose, throttle down drops it.
  → / click: shift up (also starts the engine), ←: shift down. R: restart, Esc: menu, P: pause.
@@ -72,7 +72,5 @@ button{cursor:pointer}button.go{background:#2e7d32;font-size:18px;padding:6px 22
 </div>
 
 <script src="physics.js"></script>
-<script src="tracks.js"></script>
-<script src="sounds.js"></script>
 <script src="game.js"></script>
 </body></html>

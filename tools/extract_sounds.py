@@ -85,7 +85,7 @@ def mace_to_wav(d, fn):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("--rsrc", default="work/app.rsrc", help="raw resource fork (tools/appledouble.py output)")
-    ap.add_argument("--out", default="web/sounds", help="output directory")
+    ap.add_argument("--out", default="work/sounds", help="output directory")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

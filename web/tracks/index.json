@@ -1,0 +1,54 @@
+[
+ {
+  "name": "Speed",
+  "file": "speed.json",
+  "description": "Remember to slow down for the hill!",
+  "laps": 3,
+  "allow_get_back": 1,
+  "records": [
+   30126,
+   31110,
+   35027,
+   37037
+  ]
+ },
+ {
+  "name": "Ups and Downs",
+  "file": "ups-and-downs.json",
+  "description": "This is a fun track that takes some riding skill.",
+  "laps": 3,
+  "allow_get_back": 1,
+  "records": [
+   44774,
+   46755,
+   47899,
+   48710
+  ]
+ },
+ {
+  "name": "Watch That Drop",
+  "file": "watch-that-drop.json",
+  "description": "Remember to slow down for the hill!",
+  "laps": 3,
+  "allow_get_back": 1,
+  "records": [
+   31066,
+   32405,
+   37143,
+   43056
+  ]
+ },
+ {
+  "name": "Hill Climb",
+  "file": "hill-climb.json",
+  "description": "This track can be completed with a modified bike.",
+  "laps": 1,
+  "allow_get_back": 0,
+  "records": [
+   50510,
+   48194,
+   46699,
+   36812
+  ]
+ }
+]

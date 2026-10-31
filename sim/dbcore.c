@@ -245,7 +245,7 @@ int32_t db_bike_step(DbBike *b, DbGame *g, int32_t dt, const DbTrack *t) {
     int32_t f_perp = (ffy * db_sin[fa] - ffx * db_cos[fa]) >> 10;
     int32_t damp = b->front_susp_vel < 0 ? b->front_susp_vel * p->front_rebound : b->front_susp_vel * p->front_compression;
     int32_t f_susp = p->front_spring * (b->front_ext - p->front_travel) - damp / 1000;
-    b->front_susp_vel += (dt * ((((-ffy * db_cos[fa]) - ffx * db_sin[fa] >> 10) + f_susp) / 10)) / p->front_wheel_mass;
+    b->front_susp_vel += (dt * (((((-ffy * db_cos[fa]) - ffx * db_sin[fa]) >> 10) + f_susp) / 10)) / p->front_wheel_mass;
     b->front_ext -= ((b->front_susp_vel / 10) * dt) / 10000;
     if (b->front_ext < 0) {
         f_susp += ((b->front_susp_vel * p->front_wheel_mass) / dt) * -10;
@@ -298,8 +298,8 @@ int32_t db_bike_step(DbBike *b, DbGame *g, int32_t dt, const DbTrack *t) {
             b->rear_susp_vel = 0;
         }
         int32_t ca = db_cos[a], sa = db_sin[a];
-        b->vx += ((((f_susp * sfa - f_perp * cfa >> 10) + (r_susp * sa - r_perp * ca >> 10)) / 10) * dt) / b->total_mass;
-        b->vy += (((b->total_mass * -98 + (f_susp * cfa + f_perp * sfa >> 10) + (r_susp * ca + r_perp * sa >> 10)) / 10) * dt) /
+        b->vx += (((((f_susp * sfa - f_perp * cfa) >> 10) + ((r_susp * sa - r_perp * ca) >> 10)) / 10) * dt) / b->total_mass;
+        b->vy += (((b->total_mass * -98 + ((f_susp * cfa + f_perp * sfa) >> 10) + ((r_susp * ca + r_perp * sa) >> 10)) / 10) * dt) /
                  b->total_mass;
         b->x += ((b->vx / 10) * dt) / 10000;
         b->y += ((b->vy / 10) * dt) / 10000;
@@ -323,7 +323,7 @@ int32_t db_bike_step(DbBike *b, DbGame *g, int32_t dt, const DbTrack *t) {
             b->rear_wheel_spin = (((b->rpm << 7) / ratio) * 1000) / p->rear_radius;
         /* gyration: reaction to rear wheel spin change */
         b->omega -= ((b->rear_wheel_spin - old_spin) * ((b->rear_wheel_inertia * 3) / 4)) / b->inertia;
-        b->omega -= (dt * ((b->fork_arm_len * ((-f_susp * carm) + f_perp * sarm >> 10) + r_perp * (p->rear_height + b->rear_ext) +
+        b->omega -= (dt * ((b->fork_arm_len * (((-f_susp * carm) + f_perp * sarm) >> 10) + r_perp * (p->rear_height + b->rear_ext) +
                             p->rear_dist * r_susp) /
                            10)) /
                     b->inertia;
