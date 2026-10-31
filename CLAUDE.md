@@ -43,6 +43,8 @@ via repeatable `--set key=value` (keys = `Db2Config` fields).
 - `tools/extract_images.py` — all PICTs → `work/images/pict/`, masked sprites → `work/images/sprites/`, Finder icons
   → `work/images/icons/`, gallery `work/images/index.html`. 1-bit bitmap PICTs (the masks, v1 and v2) are decoded
   in-script (ImageMagick misreads them); colour PICTs go through ImageMagick `convert`.
+- `tools/analyze_sprites.py`, `tools/render_scenery.py` — sprite rotation/pose analysis and original-style scenery
+  reconstruction (outputs in `work/images/`).
 - `tools/extract_sounds.py` — `snd ` resources → `work/sounds/snd<id>.wav` (MACE 3:1 decoded by ffmpeg via AIFF-C).
 - `tools/build_web.py [--only wasm tracks sounds]` — compile `sim/webapi.c`+cores with emcc (apt `emscripten`) into
   `web/physics.js` + `physics.wasm`, export sample tracks + ghosts to `web/tracks/` and copy sound effects to
@@ -65,6 +67,17 @@ level = 143), drawn at CG + per-index offsets (`g_game+0xf8` x / `+0x170` y, mm,
 per sprite pixel; 158–165 wheel sprites (brown/blue/red/yellow, two frames each), centred on the wheel hubs;
 masks are id+1000 (black = draw); 180 scenery strip (start sign, cactus); 201 about-box photo; 1000 title screen;
 2000/2001 background panoramas. Bike drawing: `FUN_100147c8`.
+- Sprite analysis (`tools/analyze_sprites.py`): the bike body in 128–157 is a rigid rotation about the CG at the
+  bucket-centre angle (±2°; offsets accurate to ~5 px), but the rider is re-posed per sprite: steeply nose-up he
+  lies forward over the bars (up to ~22° less rotated than the bike), steeply nose-down he leans back over the rear;
+  level/inverted = normal crouch. Angle buckets are 5° wide near level, up to 28° near inverted.
+- Ground (`Track_BuildScenery` @1001ac60, reconstructed by `tools/render_scenery.py`): one pre-rendered bitmap per
+  lap at `scale` mm/px — panorama 2000/2001 stretched to the bitmap height and mirror-tiled; dirt = 1 px black
+  `MoveTo/LineTo` per column from the surface down (no colour set → default black pen); strip-180 items stand on
+  the surface (`FUN_1001a984` sub-rects: plants 1–3, bush 4, cactus 5, GO sign 6, item 7); the grass is item 8: at
+  every track point a random 3×4 px slice of the strip's rows 46–49 (x 133–299, brown/green texture) is CopyMasked
+  with its top at the surface, giving a 4 px textured crust. The gameplay view copies from this bitmap, wrapping
+  horizontally by the lap width.
 Sounds (`snd `): 128 engine loop (playback rate set to rpm+40000, presumably /65536), 129 go, 130 crash,
 131 "keep it up" (lap), 132 bottom out, 133 "whoa" (full rotation), 134 hooray, 200 music (starts with the countdown).
 
@@ -162,8 +175,11 @@ block (`PARAM_NAMES`) into wasm memory, calls `_web_new_race(improved, 0)`, then
 game.js / enum in webapi.c). Events (go, crash, lap, flip, bottom-out, finish) are detected by diffing states.
 Menu: track (samples, generated Beginner/Expert, random seed), bike (Expert/Beginner/Custom via the editor),
 physics core, transmission, ghosts/sound/music. Best times + your best ghost in localStorage per
-track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider modelled on sprite 143, parallax hills, lap
-line. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
+track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider modelled on sprite 143 that leans like the original
+sprites (`riderLean`: 0 near level/inverted, up to 22° forward when nose-up / back when nose-down; torso pivots at
+sliding hips, two-bone `joint` keeps feet on the pegs and hands on the bars), parallax hills, lap line. Ground
+decoration (`buildDecor`, seeded per track, chunked by 100 points and culled to the view): dirt speckles, a
+grass/dirt crust and grass blades along the surface, plus plants, bushes and cacti (`drawItem`) standing on it. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
 
 ## Repository and deployment
 

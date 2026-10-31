@@ -90,7 +90,88 @@ async function loadTrack(s) {
   // parallax hills
   let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   t.hills = [0, 1].map(layer => { const h = []; for (let i = 0; i < 64; i++) h.push(rnd()); return h; });
+  t.decor = buildDecor(t.pts, id);
   return t;
+}
+
+// ---------------------------------------------------------------- ground decoration
+// Imitates the original's scenery: a speckled crust of dirt and grass along the surface (the original pastes a
+// random 3x4 px slice of grass/dirt texture at every track point), plus plants, bushes and cacti standing on it.
+// Generated once per track (seeded by its id) in chunks so only visible chunks are drawn. Only points before the
+// lap seam (n-100) get decoration; the next lap's copy supplies the duplicated stretch after it.
+const DIRT_COLS = ['#3a2410', '#5c3a19', '#a0703c', '#2a1a0b'];
+const CRUST_COLS = ['#2f6b1e', '#4c8f2a', '#6b4520'];
+const GRASS_COLS = ['#2e7d32', '#4caf50', '#7bc043', '#1b5e20'];
+const CHUNK = 100;
+function buildDecor(pts, id) {
+  let seed = 0;
+  for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const between = (lo, hi) => lo + rnd() * (hi - lo);
+  const n = pts.length, end = n - 100, chunks = [];
+  for (let c0 = 0; c0 < end; c0 += CHUNK) {
+    const c1 = Math.min(end, c0 + CHUNK);
+    const ch = {x0: pts[c0][0] - 1500, x1: pts[c1][0] + 1500, dirt: DIRT_COLS.map(() => new Path2D()),
+      crust: CRUST_COLS.map(() => new Path2D()), grass: GRASS_COLS.map(() => new Path2D()), items: []};
+    for (let i = c0; i < c1; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+      const at = u => [ax + (bx - ax) * u, ay + (by - ay) * u];
+      for (let k = 0; k < 3; k++) {                       // dirt speckles, denser near the surface
+        const [x, y] = at(rnd()), d = 60 + Math.pow(rnd(), 2.2) * 2200, sz = between(25, 60);
+        ch.dirt[Math.floor(rnd() * DIRT_COLS.length)].rect(x, y - d, sz, sz);
+      }
+      for (let k = 0; k < 3; k++) {                       // crust just under the surface
+        const [x, y] = at(rnd()), sz = between(25, 45);
+        ch.crust[Math.floor(rnd() * CRUST_COLS.length)].rect(x, y - between(20, 140), sz, sz);
+      }
+      for (let k = 0; k < 2; k++) {                       // grass blades poking up
+        const [x, y] = at(rnd());
+        ch.grass[Math.floor(rnd() * GRASS_COLS.length)].rect(x, y - 30, between(18, 28), between(60, 170));
+      }
+    }
+    chunks.push(ch);
+  }
+  // plants / bushes / cacti on the surface, at random point intervals (denser than the original's)
+  for (const [type, lo, hi] of [['plant', 40, 220], ['bush', 150, 500], ['cactus', 350, 1100]]) {
+    for (let i = Math.floor(between(lo, hi)); i < end; i += Math.floor(between(lo, hi))) {
+      chunks[Math.floor(i / CHUNK)].items.push({type, x: pts[i][0], y: pts[i][1], s: between(0.75, 1.25),
+        r: [rnd(), rnd(), rnd(), rnd()]});
+    }
+  }
+  return chunks;
+}
+function drawItem(it) {
+  const {x, y, s, r} = it;
+  cx.lineCap = 'round'; cx.lineJoin = 'round';
+  if (it.type === 'cactus') {
+    const h = 1900 * s + r[0] * 800;
+    cx.strokeStyle = '#3f8a3c'; cx.lineWidth = 260 * s;
+    cx.beginPath(); cx.moveTo(x, y - 100); cx.lineTo(x, y + h);
+    const arms = r[1] < 0.3 ? 1 : 2;
+    for (let k = 0; k < arms; k++) {
+      const side = k === 0 ? (r[2] < 0.5 ? -1 : 1) : (r[2] < 0.5 ? 1 : -1), ay = y + h * (0.35 + 0.25 * (k ? r[3] : r[0]));
+      cx.moveTo(x, ay); cx.lineTo(x + side * 330 * s, ay); cx.lineTo(x + side * 330 * s, ay + (450 + 450 * r[k + 1]) * s);
+    }
+    cx.stroke();
+    cx.strokeStyle = 'rgba(0,0,0,0.18)'; cx.lineWidth = 30 * s;          // ribs
+    cx.beginPath(); cx.moveTo(x - 50 * s, y); cx.lineTo(x - 50 * s, y + h - 60); cx.moveTo(x + 50 * s, y); cx.lineTo(x + 50 * s, y + h - 60); cx.stroke();
+  } else if (it.type === 'bush') {
+    const blobs = 5 + Math.floor(r[0] * 3);
+    for (let k = 0; k < blobs; k++) {
+      const u = k / (blobs - 1) - 0.5, rad = (230 + 160 * Math.sin(k * 2.3 + r[1] * 6)) * s;
+      cx.fillStyle = k % 2 ? '#3e6b2a' : '#517f30';
+      cx.beginPath(); cx.arc(x + u * 900 * s, y + rad * 0.7 + (1 - Math.abs(u) * 2) * 220 * s, rad, 0, 7); cx.fill();
+    }
+  } else {
+    cx.strokeStyle = r[0] < 0.35 ? '#9c8c4a' : '#5d8f3a'; cx.lineWidth = 45 * s;
+    const blades = 4 + Math.floor(r[1] * 4);
+    cx.beginPath();
+    for (let k = 0; k < blades; k++) {
+      const a = (k / (blades - 1) - 0.5) * 1.6 + (r[2] - 0.5) * 0.3, len = (350 + 350 * Math.abs(Math.sin(k * 1.7 + r[3] * 9))) * s;
+      cx.moveTo(x, y); cx.lineTo(x + Math.sin(a) * len, y + Math.cos(a) * len);
+    }
+    cx.stroke();
+  }
 }
 
 // ---------------------------------------------------------------- sound
@@ -248,6 +329,21 @@ function wheel(x, y, r, ang, col) {
 // tops, rider crouched on the pegs with hips ~300 mm and head ~1000 mm above the CG.
 const PLAYER_STYLE = {body: '#3cb043', engine: '#2b2b2b', metal: '#b8b8b8', tire: '#1a1a1a', suit: '#203a8a', helmet: '#f2f2f2', cg: '#e01010'};
 function ghostStyle(c) { return {body: c, engine: c, metal: c, tire: c, suit: c, helmet: c, cg: null}; }
+// Rider lean (deg, + = backward) for a bike tilted `tilt` deg counter-clockwise (nose up > 0). Measured from the
+// original's sprites: none near level or inverted, up to ~22 deg at steep angles, forward over the bars when the
+// nose is up and back over the rear when it is down.
+function smooth(a, b, v) { const u = Math.max(0, Math.min(1, (v - a) / (b - a))); return u * u * (3 - 2 * u); }
+function riderLean(tilt) {
+  const at = Math.abs(tilt);
+  return -Math.sign(tilt) * 22 * smooth(10, 60, at) * (1 - smooth(100, 150, at));
+}
+// Two-bone joint (knee/elbow) between A and B with segment lengths l1, l2, bent to the left of A->B.
+function joint(A, B, l1, l2) {
+  const dx = B[0] - A[0], dy = B[1] - A[1], d = Math.min(Math.hypot(dx, dy) || 1, l1 + l2 - 1);
+  const ux = dx / d, uy = dy / d, a = Math.max(-l1, Math.min(l1, (l1 * l1 - l2 * l2 + d * d) / (2 * d)));
+  const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+  return [A[0] + ux * a - uy * h, A[1] + uy * a + ux * h];
+}
 function drawBike(x, y, fwx, fwy, rwx, rwy, fr, rr, st, af, ar) {
   const fx = fwx - rwx, fy = fwy - rwy, fl = Math.hypot(fx, fy) || 1, ux = fx / fl, uy = fy / fl, nx = -uy, ny = ux;
   const P = (a, b) => [x + ux * a + nx * b, y + uy * a + ny * b];
@@ -263,11 +359,16 @@ function drawBike(x, y, fwx, fwy, rwx, rwy, fr, rr, st, af, ar) {
   line([P(-880, 190), P(-560, 240), P(-80, 260), P(100, 290)], 90, st.body); // seat / rear fender
   poly([[20, 150], [330, 180], [300, 330], [60, 330]], st.body);        // tank
   line([P(520, -40), P(780, -10), P(1010, -110)], 60, st.body);          // front fender
-  // rider, crouched on the pegs
-  line([P(-40, -110), P(140, 330), P(-170, 360)], 120, st.suit);        // shin, thigh
-  line([P(-170, 360), P(90, 820)], 150, st.suit);                       // torso
-  line([P(90, 800), P(250, 620), P(300, 470)], 90, st.suit);            // arm
-  cx.fillStyle = st.helmet; cx.beginPath(); cx.arc(...P(250, 1000), 140, 0, 7); cx.fill();
+  // rider: feet on the pegs, hands on the bars, torso leaning by riderLean() about sliding hips
+  const lean = riderLean(Math.atan2(uy, ux) * 180 / Math.PI), lr = lean * Math.PI / 180;
+  const rot = (a, b) => [a * Math.cos(lr) - b * Math.sin(lr), a * Math.sin(lr) + b * Math.cos(lr)];
+  const foot = [-40, -110], hand = [300, 470], hip = [-170 - lean / 22 * 150, 360];
+  const t = rot(260, 460), shoulder = [hip[0] + t[0], hip[1] + t[1]], h = rot(160, 180), head = [shoulder[0] + h[0], shoulder[1] + h[1]];
+  const knee = joint(hip, foot, 311, 474), elbow = joint(shoulder, hand, 256, 158);
+  line([P(...foot), P(...knee), P(...hip)], 120, st.suit);              // shin, thigh
+  line([P(...hip), P(...shoulder)], 150, st.suit);                      // torso
+  line([P(...shoulder), P(...elbow), P(...hand)], 90, st.suit);         // arm
+  cx.fillStyle = st.helmet; cx.beginPath(); cx.arc(...P(...head), 140, 0, 7); cx.fill();
   if (st.cg) { cx.fillStyle = st.cg; cx.beginPath(); cx.arc(x, y, 55, 0, 7); cx.fill(); }
 }
 function ghostAt(g, rt) {
@@ -309,10 +410,19 @@ function render(ms) {
   cx.setTransform(scale, 0, 0, -scale, W * 0.42 - camX * scale, H * 0.58 + race.camY * scale);
   const dirt = cx.createLinearGradient(0, race.camY + 4000, 0, race.camY - 8000);
   dirt.addColorStop(0, '#8a5f33'); dirt.addColorStop(1, '#4e3519');
+  const viewHalf = W / scale;
   for (const k of [-1, 0, 1]) { // previous/next lap copies so the course continues past both ends
-    cx.save(); cx.translate(k * track.lapLength, k * track.lapRise);
+    const ox = k * track.lapLength, lo = camX - viewHalf - ox, hi = camX + viewHalf - ox;
+    const vis = track.decor.filter(c => c.x1 > lo && c.x0 < hi);
+    cx.save(); cx.translate(ox, k * track.lapRise);
+    for (const c of vis) c.items.forEach(drawItem);                     // stand on the surface, base hidden by ground
     cx.fillStyle = dirt; cx.fill(track.path);
+    for (const c of vis) {
+      c.dirt.forEach((p, j) => { cx.fillStyle = DIRT_COLS[j]; cx.fill(p); });
+      c.crust.forEach((p, j) => { cx.fillStyle = CRUST_COLS[j]; cx.fill(p); });
+    }
     cx.strokeStyle = '#5b8f2e'; cx.lineWidth = 90; cx.lineJoin = 'round'; cx.stroke(track.edge);
+    for (const c of vis) c.grass.forEach((p, j) => { cx.fillStyle = GRASS_COLS[j]; cx.fill(p); });
     cx.restore();
   }
   // lap line (crossing pts[n-40] wraps the bike back by one lap length, so draw it at both places)
