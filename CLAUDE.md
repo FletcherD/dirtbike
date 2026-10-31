@@ -180,9 +180,10 @@ sprites (`riderLean`: 0 near level/inverted, up to 22° forward when nose-up / b
 sliding hips, two-bone `joint` keeps feet on the pegs and hands on the bars), parallax hills, lap line. Ground
 decoration (`buildDecor`, seeded per track, chunked by 100 points and culled to the view) follows a biome
 (`BIOMES`: palette, surface layers, plant types with spacing; menu "Scenery", auto = hash of the track id):
-grassland = speckles, grass crust and blades, plants, puffy bushes, creosote; desert = sand with pebble speckles,
-rocks, saguaro/barrel cacti and L-system plants. `lPlant` expands a stochastic L-system (`L_PLANTS`: creosote,
-ocotillo; F/+/-/[ ] turtle with angle/length jitter, flowers at some tips) into a Path2D once per plant. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
+grassland = speckles, grass crust and blades, grass tufts, bushes; desert = sand with pebble speckles, bushes and
+small saguaros. All bushes come from one function, `lBush`: a stochastic L-system whose parameters (branchiness,
+fork angle, waviness, height, width, colour) are drawn per bush from the biome's `bush` ranges, built once into a
+Path2D scaled to the drawn height. Camera: ~16 m visible at rest (`H / 16000`), zooming out with speed. The track is drawn three times, shifted by ±(pts[n−100] − pts[0]), because the world repeats every lap.
 
 ## Repository and deployment
 

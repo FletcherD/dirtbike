@@ -106,13 +106,17 @@ const BIOMES = {
     sky: ['#5ea8ef', '#cfe9ff'], hills: ['#9fb7c9', '#86a58a'], ground: ['#8a5f33', '#4e3519'], edge: ['#5b8f2e', 90],
     speckles: ['#3a2410', '#5c3a19', '#a0703c', '#2a1a0b'], crust: ['#2f6b1e', '#4c8f2a', '#6b4520'],
     blades: ['#2e7d32', '#4caf50', '#7bc043', '#1b5e20'],
-    items: [['plant', 40, 220], ['bush', 150, 500], ['creosote', 300, 900]],
+    items: [['plant', 40, 220], ['bush', 120, 420]],
+    bush: {branch: [0.6, 0.9], angle: [18, 30], bend: [3, 7], height: [450, 900], width: [22, 30],
+      colors: ['#4f7f2f', '#5e8a35', '#476f2a', '#6b8a3a']},
   },
   desert: {
     sky: ['#6fa9df', '#f6dfb8'], hills: ['#d9b48f', '#c99a66'], ground: ['#d8b071', '#9c6a35'], edge: ['#b98a50', 50],
     speckles: ['#8a6a45', '#f2dcaa', '#6e5338', '#b88a55'], crust: ['#c49a60', '#e8c88f', '#a87d48'],
     blades: null,
-    items: [['rock', 60, 260], ['creosote', 80, 300], ['ocotillo', 250, 800], ['cactus', 300, 900], ['barrel', 200, 700]],
+    items: [['bush', 80, 300], ['cactus', 400, 1200]],
+    bush: {branch: [0.15, 0.5], angle: [12, 26], bend: [5, 11], height: [400, 1100], width: [18, 26],
+      colors: ['#6f7a3c', '#7d6a3e', '#5f6e35', '#8a7a52']},
   },
 };
 function biomeFor(id, choice) {
@@ -155,60 +159,53 @@ function buildDecor(pts, id, bio) {
   for (const [type, lo, hi] of bio.items) {
     for (let i = Math.floor(between(lo, hi)); i < end; i += Math.floor(between(lo, hi))) {
       const it = {type, x: pts[i][0], y: pts[i][1], s: between(0.75, 1.25), r: [rnd(), rnd(), rnd(), rnd()]};
-      if (L_PLANTS[type]) it.shape = lPlant(L_PLANTS[type], rnd);
+      if (type === 'bush') it.shape = lBush(bio.bush, rnd);
       chunks[Math.floor(i / CHUNK)].items.push(it);
     }
   }
   return chunks;
 }
 
-// Stochastic L-system plants. rules: symbol -> [[weight, replacement], ...]. Turtle: F = draw forward,
-// + / - = turn by angle (with jitter), [ ] = push/pop (branches get shorter), 'A' left at a branch tip can get a
-// flower. Geometry is built once per plant into a Path2D in mm, origin at the base, growing up (+y).
-const L_PLANTS = {
-  creosote: {  // spindly desert/scrub bush: many thin forking twigs
-    axiom: '[-X][X][+X]', iters: 4, angle: 24, angleJit: 12, len: 90, lenJit: 0.35, shrink: 0.9, width: 26,
-    color: ['#6f7a3c', '#7d6a3e', '#5f6e35'], bend: 6,
-    rules: {X: [[0.45, 'F[+X][-X]FX'], [0.3, 'F[-X]FX'], [0.25, 'F[+X]FX']], F: [[0.6, 'FF'], [0.4, 'F']]},
-  },
-  ocotillo: {  // long, wavy, nearly unbranched stems fanning out from the base; red flowers at some tips
-    axiom: '[--A][-A][A][+A][++A]', iters: 17, angle: 14, angleJit: 5, len: 120, lenJit: 0.3, shrink: 0.95, width: 30,
-    color: ['#5e5a3a', '#4f5934'], bend: 9, tip: '#d8402a',
-    rules: {A: [[0.82, 'FA'], [0.1, 'F[+B]A'], [0.08, 'F[-B]A']], B: [[1, 'FF']]},
-  },
-};
-function lPlant(sp, rnd) {
-  let str = sp.axiom;
-  for (let i = 0; i < sp.iters; i++) {
+// Bushes: one stochastic L-system with per-bush random parameters drawn from the biome's ranges (bio.bush):
+// branch = how often a twig forks (low = spindly canes, high = dense bush), angle = fork angle, bend = waviness.
+// Turtle: F = draw forward, + / - = turn (jittered), [ ] = push/pop. The result is scaled to a random target
+// height and built once into a Path2D (mm, origin at the base, growing up +y).
+function lBush(p, rnd) {
+  const r = ([lo, hi]) => lo + rnd() * (hi - lo);
+  const branch = r(p.branch), angle = r(p.angle), bend = r(p.bend);
+  const rules = {X: [[branch * 0.5, 'F[+X][-X]FX'], [branch * 0.25, 'F[-X]FX'], [branch * 0.25, 'F[+X]FX'], [1 - branch, 'FX']],
+    F: [[0.5, 'FF'], [0.5, 'F']]};
+  const stems = 2 + Math.floor(rnd() * 3);
+  let str = Array.from({length: stems}, (_, k) => '[' + '+-'[k % 2].repeat(Math.ceil(k / 2)) + 'X]').join('');
+  const iters = 3 + Math.floor(rnd() * 3);
+  for (let i = 0; i < iters; i++) {
     let out = '';
     for (const c of str) {
-      const opts = sp.rules[c];
+      const opts = rules[c];
       if (!opts) { out += c; continue; }
       let u = rnd() * opts.reduce((a, o) => a + o[0], 0);
-      const o = opts.find(o => (u -= o[0]) <= 0) || opts[opts.length - 1];
-      out += o[1];
+      out += (opts.find(o => (u -= o[0]) <= 0) || opts[opts.length - 1])[1];
     }
-    str = out.length > 6000 ? str : out; // keep plants bounded
+    str = out.length > 5000 ? str : out; // keep bushes bounded
   }
-  const path = new Path2D(), tips = new Path2D(), stack = [];
-  let x = 0, y = 0, a = 90, len = sp.len;
-  path.moveTo(0, 0);
+  const segs = [], stack = [];
+  let x = 0, y = 0, a = 90, len = 1, top = 1;
   for (const c of str) {
     if (c === 'F') {
-      a += (rnd() - 0.5) * sp.bend;
-      const l = len * (1 + (rnd() - 0.5) * 2 * sp.lenJit);
-      x += Math.cos(a * Math.PI / 180) * l; y += Math.sin(a * Math.PI / 180) * l;
-      path.lineTo(x, y);
+      a += (rnd() - 0.5) * bend;
+      const l = len * (0.7 + 0.6 * rnd()), nx = x + Math.cos(a * Math.PI / 180) * l, ny = y + Math.sin(a * Math.PI / 180) * l;
+      segs.push([x, y, nx, ny]); x = nx; y = ny; top = Math.max(top, y);
     } else if (c === '+' || c === '-') {
-      a += (c === '+' ? 1 : -1) * (sp.angle + (rnd() - 0.5) * 2 * sp.angleJit);
+      a += (c === '+' ? 1 : -1) * angle * (0.6 + 0.8 * rnd());
     } else if (c === '[') {
-      stack.push([x, y, a, len]); len *= sp.shrink;
+      stack.push([x, y, a, len]); len *= 0.9;
     } else if (c === ']') {
-      if (sp.tip && rnd() < 0.35) { tips.moveTo(x + 40, y); tips.arc(x, y, 40, 0, 7); }
-      [x, y, a, len] = stack.pop(); path.moveTo(x, y);
+      [x, y, a, len] = stack.pop();
     }
   }
-  return {path, tips, color: sp.color[Math.floor(rnd() * sp.color.length)], width: sp.width, tip: sp.tip};
+  const k = r(p.height) / top, path = new Path2D();
+  for (const [x0, y0, x1, y1] of segs) { path.moveTo(x0 * k, y0 * k); path.lineTo(x1 * k, y1 * k); }
+  return {path, color: p.colors[Math.floor(rnd() * p.colors.length)], width: r(p.width)};
 }
 function drawItem(it) {
   const {x, y, s, r} = it;
@@ -216,39 +213,19 @@ function drawItem(it) {
   if (it.shape) {
     cx.save(); cx.translate(x, y - 40); cx.scale(s, s);
     cx.strokeStyle = it.shape.color; cx.lineWidth = it.shape.width; cx.stroke(it.shape.path);
-    if (it.shape.tip) { cx.fillStyle = it.shape.tip; cx.fill(it.shape.tips); }
     cx.restore();
   } else if (it.type === 'cactus') {
-    const h = 1900 * s + r[0] * 800;
-    cx.strokeStyle = '#4b8a46'; cx.lineWidth = 260 * s;
+    const h = 1100 * s + r[0] * 500;
+    cx.strokeStyle = '#4b8a46'; cx.lineWidth = 170 * s;
     cx.beginPath(); cx.moveTo(x, y - 100); cx.lineTo(x, y + h);
     const arms = r[1] < 0.3 ? 1 : 2;
     for (let k = 0; k < arms; k++) {
       const side = k === 0 ? (r[2] < 0.5 ? -1 : 1) : (r[2] < 0.5 ? 1 : -1), ay = y + h * (0.35 + 0.25 * (k ? r[3] : r[0]));
-      cx.moveTo(x, ay); cx.lineTo(x + side * 330 * s, ay); cx.lineTo(x + side * 330 * s, ay + (450 + 450 * r[k + 1]) * s);
+      cx.moveTo(x, ay); cx.lineTo(x + side * 220 * s, ay); cx.lineTo(x + side * 220 * s, ay + (280 + 280 * r[k + 1]) * s);
     }
     cx.stroke();
-    cx.strokeStyle = 'rgba(0,0,0,0.18)'; cx.lineWidth = 30 * s;          // ribs
-    cx.beginPath(); cx.moveTo(x - 50 * s, y); cx.lineTo(x - 50 * s, y + h - 60); cx.moveTo(x + 50 * s, y); cx.lineTo(x + 50 * s, y + h - 60); cx.stroke();
-  } else if (it.type === 'barrel') {
-    const w = (220 + 120 * r[0]) * s, h = (260 + 200 * r[1]) * s;
-    cx.fillStyle = '#5a8f4a'; cx.beginPath(); cx.ellipse(x, y + h * 0.45, w, h, 0, 0, 7); cx.fill();
-    cx.strokeStyle = 'rgba(0,0,0,0.2)'; cx.lineWidth = 22 * s; cx.beginPath();
-    for (const f of [-0.5, 0, 0.5]) cx.ellipse(x, y + h * 0.45, w * Math.abs(f) + 1, h, 0, 0, 7);
-    cx.stroke();
-    if (r[2] < 0.6) { cx.fillStyle = r[3] < 0.5 ? '#e8b92f' : '#d8402a'; cx.beginPath(); cx.arc(x, y + h * 1.4, 70 * s, 0, 7); cx.fill(); }
-  } else if (it.type === 'rock') {
-    const w = (150 + 350 * r[0]) * s, h = (90 + 220 * r[1]) * s;
-    cx.fillStyle = r[2] < 0.5 ? '#9c8b74' : '#86745e'; cx.beginPath();
-    cx.moveTo(x - w, y - 60); cx.lineTo(x - w * 0.8, y + h * 0.6); cx.lineTo(x - w * 0.2 * r[3], y + h);
-    cx.lineTo(x + w * 0.6, y + h * 0.8); cx.lineTo(x + w, y - 60); cx.closePath(); cx.fill();
-  } else if (it.type === 'bush') {
-    const blobs = 5 + Math.floor(r[0] * 3);
-    for (let k = 0; k < blobs; k++) {
-      const u = k / (blobs - 1) - 0.5, rad = (230 + 160 * Math.sin(k * 2.3 + r[1] * 6)) * s;
-      cx.fillStyle = k % 2 ? '#3e6b2a' : '#517f30';
-      cx.beginPath(); cx.arc(x + u * 900 * s, y + rad * 0.7 + (1 - Math.abs(u) * 2) * 220 * s, rad, 0, 7); cx.fill();
-    }
+    cx.strokeStyle = 'rgba(0,0,0,0.18)'; cx.lineWidth = 20 * s;          // ribs
+    cx.beginPath(); cx.moveTo(x - 35 * s, y); cx.lineTo(x - 35 * s, y + h - 40); cx.moveTo(x + 35 * s, y); cx.lineTo(x + 35 * s, y + h - 40); cx.stroke();
   } else {
     cx.strokeStyle = r[0] < 0.35 ? '#9c8c4a' : '#5d8f3a'; cx.lineWidth = 45 * s;
     const blades = 4 + Math.floor(r[1] * 4);
@@ -490,7 +467,7 @@ function render(ms) {
   const speed = Math.hypot(st[S.VX], st[S.VY]) / 1e4; // m/s
   const targetZoom = 1 / (1 + Math.max(0, speed - 6) / 25);
   view.zoom += (targetZoom - view.zoom) * Math.min(1, ms / 400);
-  const scale = H / 10000 * view.zoom;
+  const scale = H / 16000 * view.zoom; // ~16 m visible at rest, wider at speed (the original shows a wide view)
   if (race.camY === null || Math.abs(race.camY - st[S.Y]) > 20000) race.camY = st[S.Y];
   race.camY += (st[S.Y] - race.camY) * Math.min(1, ms / 150);
   const camX = st[S.X] + 2500 * Math.min(1, speed / 20);
