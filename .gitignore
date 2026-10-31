@@ -1,0 +1,18 @@
+# Original game and extracted/derived RE material (local only)
+dirt_bike_4.3.img_.sit
+extract/
+raw/
+game/
+work/
+# Generated outputs
+runs/
+sim/build/
+web/sounds/
+# Python
+.venv/
+__pycache__/
+*.pyc
+# Built in CI from sim/ (tools/build_web.py --only wasm)
+web/physics.js
+# Decompiled original code (local reference; regenerate with tools/funcs.py --show)
+re/physics_step_decomp.c

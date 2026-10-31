@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dirt Bike</title>
+<style>
+html,body{margin:0;height:100%;background:#000;color:#eee;font:14px/1.35 "Chicago","Geneva",monospace;overflow:hidden;user-select:none}
+#game{display:block;width:100vw;height:100vh;cursor:crosshair;touch-action:none}
+.panel{position:absolute;background:rgba(10,12,20,.82);border:1px solid #555;border-radius:8px;padding:10px 12px}
+#hud{right:12px;top:12px;width:150px;pointer-events:none}
+#hud .k{color:#999;font-size:11px}
+#gear{font-size:42px;text-align:center;line-height:46px}
+#status{left:12px;top:12px;pointer-events:none;white-space:pre}
+#msg{position:absolute;left:0;right:0;top:32%;text-align:center;font-size:42px;font-weight:bold;
+     text-shadow:0 0 6px #000,0 0 2px #000;pointer-events:none;white-space:pre-line}
+#msg small{font-size:16px;font-weight:normal}
+#menu{left:50%;top:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;max-height:92vh;overflow:auto}
+#menu h1{margin:0 0 4px;font-size:30px;letter-spacing:1px}
+#menu .row{display:flex;gap:10px;align-items:center;margin:7px 0}
+#menu label.l{width:110px;color:#aaa}
+select,input,button{font:inherit;background:#222;color:#eee;border:1px solid #666;border-radius:4px;padding:3px 6px}
+button{cursor:pointer}button.go{background:#2e7d32;font-size:18px;padding:6px 22px}
+#desc{color:#ccc;font-style:italic;min-height:1.4em}
+#best{color:#ffd54f}
+#help{color:#999;font-size:12px;margin-top:8px}
+#editor{left:50%;top:50%;transform:translate(-50%,-50%);width:560px;max-width:96vw;max-height:92vh;overflow:auto;display:none}
+#editor table{border-collapse:collapse;width:100%}
+#editor td{padding:2px 4px}#editor input{width:80px}
+.hidden{display:none!important}
+</style></head>
+<body>
+<canvas id="game"></canvas>
+<div id="status" class="panel"></div>
+<div id="hud" class="panel">
+ <div class="k">throttle (mouse height)</div>
+ <canvas id="thr" width="150" height="130"></canvas>
+ <div class="k">gear</div><div id="gear">off</div>
+ <div class="k">rpm</div><canvas id="rpm" width="150" height="12"></canvas>
+ <div class="k" style="margin-top:4px">speed</div><div id="speed">0 km/h</div>
+</div>
+<div id="msg"></div>
+
+<div id="menu" class="panel">
+ <h1>Dirt Bike</h1>
+ <div style="color:#999;margin-bottom:6px">After Dirt Bike 4.3 by Brad Quick &amp; Michel de Messieres (1998)</div>
+ <div class="row"><label class="l">Track</label><select id="track"></select>
+   <input id="seed" type="number" placeholder="seed" style="width:110px" class="hidden"></div>
+ <div id="desc"></div>
+ <div class="row"><label class="l">Bike</label><select id="bike">
+   <option value="expert">Expert's Bike</option><option value="beginner">Beginner's Bike</option><option value="custom">Custom Bike</option></select>
+   <button id="editbike">Edit Bike…</button></div>
+ <div class="row"><label class="l">Physics</label><select id="physics">
+   <option value="improved">Improved (fixed timestep, float)</option><option value="original">Original (bit-exact 1998)</option></select></div>
+ <div class="row"><label class="l">Transmission</label><select id="trans">
+   <option value="auto">Automatic</option><option value="manual">Manual (→ / click up, ← down)</option></select></div>
+ <div class="row"><label class="l">Options</label>
+   <label><input type="checkbox" id="ghosts" checked> ghosts</label>
+   <label><input type="checkbox" id="sound" checked> sound</label></div>
+ <div class="row"><label class="l">Best</label><span id="best">–</span></div>
+ <div class="row"><button class="go" id="start">Ride! (Enter)</button></div>
+ <div id="help">Throttle is the <b>height of the mouse</b>: top = full throttle, below the dashed line = brake.
+ Up/Down keys also work. In the air, throttle up lifts the nose, throttle down drops it.
+ → / click: shift up (also starts the engine), ←: shift down. R: restart, Esc: menu, P: pause.
+ Blue bikes are recorded high scores from the original track files, green is your best run.</div>
+</div>
+
+<div id="editor" class="panel">
+ <h2 style="margin:0 0 6px">Edit Bike</h2>
+ <div style="color:#999;font-size:12px;margin-bottom:6px">Values are the game's internal units (mm, kg, degrees; power/brake/gears unitless).</div>
+ <table id="edtable"></table>
+ <div class="row" style="margin-top:8px"><button id="edsave">Save as Custom Bike</button>
+   <button id="edexpert">Load Expert</button><button id="edbeginner">Load Beginner</button><button id="edcancel">Cancel</button></div>
+</div>
+
+<script src="physics.js"></script>
+<script src="tracks.js"></script>
+<script src="sounds.js"></script>
+<script src="game.js"></script>
+</body></html>

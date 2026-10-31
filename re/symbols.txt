@@ -1,0 +1,50 @@
+# Ghidra annotations for Dirt Bike 4.3 PPC (work/app.pef). Applied by tools/ghidra_scripts/Annotate.java.
+# Format: ADDR NAME [# comment]
+10010a18 Bike_PhysicsStep  # vtable slot 0x18: one physics substep for a bike (fixed-point)
+1000b5e4 InitTrigTables  # sin/cos tables, 360 entries, *1024 rounded
+100163f0 IntDistance  # (int)sqrt((x1-x2)^2+(y1-y2)^2)
+10029730 g_sinTab  # int[360], round(1024*sin(deg))
+10029190 g_cosTab  # int[360], round(1024*cos(deg))
+
+
+10022828 __ptr_glue  # CFM indirect call through TVector in r12
+10027ac8 vtbl_Bike  # vptr value stored in Bike objects; methods at +8..
+10027bac vtbl_ComputerBike
+1001060c Bike_Reset  # vtbl+0x1c: place bike at race start, compute derived inertia terms
+10013648 Bike_SetFinished  # vtbl+0x2c (finished flag @0x6c, place @0x74)
+1001395c ComputerBike_UpdateThrottle  # vtbl+0x30: AI throttle (dt)
+10013a64 ComputerBike_EditDialog
+10013894 ComputerBike_Save
+1001d1fc File_Read  # (file, dst, len)
+1001d264 File_ReadChunk  # (file, dst, maxlen, chunklen): read min, skip remainder
+1001d194 File_Write
+1001a784 Track_LoadFromFile
+1001a574 Track_Construct
+1001b698 Track_GenerateFromSeed  # used for Beginner/Expert tracks
+100134dc Bike_LoadFromFile  # 8-byte chunk header then 0x60 bytes into bike+0x88
+1000df04 Game_Substep  # one physics substep for all bikes: dt = acc/nsub; race state machine; refill acc from Time Manager (us/83)
+10017c40 LocalBike_PhysicsStep  # Bike_PhysicsStep + replay recording
+10017cc8 LocalBike_UpdateThrottle  # vtbl+0x30: mouse: throttle=(294-globalY)*200; keys +-15*dt; arrows shift
+10011c18 Bike_AutoShift  # up if rpm>40000 && angle>170 (gear<5); down if rpm<20000
+10011cf4 Bike_ShiftUp  # starts engine if not started; gear++ only in race state 2
+10011dd4 Bike_ShiftDown
+10016480 AngleOf  # best-matching table angle (deg) for vector (x1,y1)->(x2,y2)
+100102bc Bike_SetExpertDefaults
+100103a4 Bike_SetBeginnerDefaults
+10002df0 RandRange  # ANSI LCG seed*1103515245+12345; (seed>>17)/32768*(hi+2-lo)+(lo-1), reject outside [lo,hi]
+100267b4 g_randSeed
+1001b3d0 Track_FixupEnd  # blend last 100 points to flat run for multi-lap, then shift so min y = 300
+1001ac60 Track_BuildScenery  # graphics only (consumes RNG)
+1001e930 Timer_ElapsedUs
+10029cd0 g_game
+10010548 Bike_PromptSaveIfDirty
+10010404 Bike_Construct
+1001049c Bike_Destruct
+1000dc54 Game_NewRace  # reset bikes; nsub=1, acc=1, raceStarted=0, raceTime=0, countdown=0, state=0
+10019704 Replay_Record  # store (x,y,wheel offsets,theta,time) every interval; halves resolution when 1450 samples full
+10019650 Replay_Construct
+1000c564 App_Construct  # also calls InitTrigTables
+1001e80c Timer_Construct  # Time Manager task, 100000us period
+10006b78 GetMouseGlobal
+1001659c IsKeyDown  # GetKeys bit test (mac virtual keycode)
+10027ac8 vtbl_Bike

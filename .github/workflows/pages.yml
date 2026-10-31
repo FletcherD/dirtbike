@@ -1,0 +1,32 @@
+# Build the physics WebAssembly from sim/ and publish the web game (web/) to GitHub Pages.
+# web/tracks.js and web/sounds.js are committed (they need the original game files to regenerate).
+name: Deploy web game to Pages
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", "sim/**", "tools/build_web.py", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Build physics.js (WebAssembly)
+        run: python3 tools/build_web.py --only wasm
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

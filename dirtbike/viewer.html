@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Dirt Bike run viewer</title>
+<style>
+body{margin:0;background:#111;color:#ddd;font:13px monospace;overflow:hidden}
+#wrap{position:relative}
+#c{display:block;width:100vw;height:68vh;background:#8ec9ff}
+#hud{position:absolute;right:10px;top:10px;width:150px;background:rgba(0,0,0,.55);padding:8px;border-radius:6px}
+#hud canvas{display:block}
+#gear{font-size:44px;text-align:center;line-height:48px}
+#strip{display:block;width:100vw;height:110px;background:#1b1b1b;cursor:pointer}
+#ui{padding:4px 10px}
+#info{white-space:pre}
+.k{color:#888}
+</style></head><body>
+<div id="wrap"><canvas id="c"></canvas>
+<div id="hud">
+ <div class="k">throttle (mouse height)</div>
+ <canvas id="thr" width="150" height="150"></canvas>
+ <div class="k">gear</div><div id="gear">N</div>
+ <div class="k">rpm</div><canvas id="rpm" width="150" height="14"></canvas>
+</div></div>
+<canvas id="strip"></canvas>
+<div id="ui">
+<button id="play">pause</button> speed <select id="spd"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
+zoom <input id="zoom" type="range" min="20" max="400" value="100" style="width:120px">
+<span class="k">space: play/pause, arrows: step 1 frame (shift: 10), click strip: seek</span>
+<div id="info"></div>
+</div>
+<script>
+const D = __DATA__;
+const K = Object.fromEntries(D.frame_keys.map((k,i)=>[k,i]));
+const F = D.frames, P = D.track.points, n = P.length;
+const TMAX = 58800;
+const cv = document.getElementById('c'), cx = cv.getContext('2d');
+const strip = document.getElementById('strip'), sx = strip.getContext('2d');
+let i = 0, playing = true, last = null, acc = 0;
+const frameMs = (F.length>1 ? (F[F.length-1][K.race_time]-F[0][K.race_time])/(F.length-1) : 20) || 20;
+const playBtn = document.getElementById('play');
+function setPlaying(p){ playing = p; playBtn.textContent = playing ? 'pause' : 'play'; }
+playBtn.onclick = () => setPlaying(!playing);
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { setPlaying(!playing); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { setPlaying(false); i = Math.min(F.length-1, i + (e.shiftKey?10:1)); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { setPlaying(false); i = Math.max(0, i - (e.shiftKey?10:1)); e.preventDefault(); }
+});
+strip.onmousedown = e => { const seek = ev => { i = Math.max(0, Math.min(F.length-1, Math.round(ev.offsetX / strip.clientWidth * (F.length-1)))); };
+  seek(e); strip.onmousemove = ev => { if (ev.buttons) seek(ev); }; };
+
+function ghostAt(g, rt) {
+  const s = g.samples; if (!s.length || rt < s[0][7]) return null;
+  let lo = 0, hi = s.length-1; if (rt >= s[hi][7]) return s[hi];
+  while (hi-lo>1) { const m=(lo+hi)>>1; if (s[m][7] <= rt) lo=m; else hi=m; }
+  const a=s[lo], b=s[hi], u=(rt-a[7])/(b[7]-a[7]);
+  if (Math.abs(b[0]-a[0])>20000) return a;
+  return a.map((v,j)=> j<7 ? v+(b[j]-v)*u : v);
+}
+function wheel(x, y, r, ang, col, spokes) {
+  cx.lineWidth = 40; cx.strokeStyle = col;
+  cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.stroke();
+  if (ang === null) return;
+  cx.lineWidth = 14;
+  cx.beginPath();
+  for (let k = 0; k < spokes; k++) { const a = ang + k*Math.PI*2/spokes;
+    cx.moveTo(x, y); cx.lineTo(x + Math.cos(a)*(r-20), y + Math.sin(a)*(r-20)); }
+  cx.stroke();
+  cx.fillStyle = col; cx.beginPath(); cx.arc(x, y, 40, 0, 7); cx.fill();
+}
+function drawBike(x,y,fwx,fwy,rwx,rwy,fr,rr,col,wcol,af,ar) {
+  cx.lineWidth = 60; cx.strokeStyle = col;
+  cx.beginPath(); cx.moveTo(rwx,rwy); cx.lineTo(x,y); cx.lineTo(fwx,fwy); cx.stroke();
+  wheel(fwx, fwy, fr, af, wcol, 6); wheel(rwx, rwy, rr, ar, wcol, 6);
+  cx.fillStyle = col; cx.beginPath(); cx.arc(x,y,80,0,7); cx.fill();
+}
+// --- timeline strip (static part cached) ---
+let stripImg = null;
+function buildStrip() {
+  const W = strip.width = strip.clientWidth, H = strip.height = strip.clientHeight;
+  sx.fillStyle = '#1b1b1b'; sx.fillRect(0,0,W,H);
+  const N = F.length, X = j => j/(N-1||1)*W;
+  const tH = H*0.55, gH = H*0.25;
+  // brake shading and throttle line
+  sx.fillStyle = 'rgba(220,40,40,.45)';
+  for (let j=0;j<N;j++) if (F[j][K.throttle] < 1 && F[j][K.state] === 2) sx.fillRect(X(j), 0, Math.max(1, W/N), tH);
+  sx.strokeStyle = '#4caf50'; sx.lineWidth = 1; sx.beginPath();
+  for (let j=0;j<N;j++) { const y = tH - F[j][K.throttle]/TMAX*(tH-2) - 1; j ? sx.lineTo(X(j), y) : sx.moveTo(X(j), y); } sx.stroke();
+  // gear steps
+  sx.strokeStyle = '#ffb300'; sx.beginPath();
+  for (let j=0;j<N;j++) { const y = tH + 4 + gH - F[j][K.gear]/5*gH; j ? sx.lineTo(X(j), y) : sx.moveTo(X(j), y); } sx.stroke();
+  // speed
+  let vmax = 1; for (const f of F) vmax = Math.max(vmax, f[K.vx]);
+  sx.strokeStyle = '#64b5f6'; sx.beginPath();
+  for (let j=0;j<N;j++) { const y = H - 2 - Math.max(0,F[j][K.vx])/vmax*(H-tH-gH-8); j ? sx.lineTo(X(j), y) : sx.moveTo(X(j), y); } sx.stroke();
+  // crashes and laps
+  for (let j=1;j<N;j++) {
+    if (F[j][K.crashes] !== F[j-1][K.crashes]) { sx.fillStyle = '#f44'; sx.fillRect(X(j)-1, 0, 3, H); }
+    if (F[j][K.laps_done] !== F[j-1][K.laps_done]) { sx.fillStyle = '#fff'; sx.fillRect(X(j), 0, 1, H); }
+  }
+  sx.fillStyle = '#aaa'; sx.font = '11px monospace';
+  sx.fillText('throttle (red = brake)', 4, 11); sx.fillText('gear', 4, tH + 14); sx.fillText('speed', 4, H - 4);
+  stripImg = sx.getImageData(0,0,W,H);
+}
+function drawStrip() {
+  if (!stripImg || stripImg.width !== strip.clientWidth) buildStrip();
+  sx.putImageData(stripImg, 0, 0);
+  const x = i/(F.length-1||1)*strip.width;
+  sx.fillStyle = '#fff'; sx.fillRect(x-1, 0, 2, strip.height);
+}
+// --- HUD ---
+const thrC = document.getElementById('thr').getContext('2d'), rpmC = document.getElementById('rpm').getContext('2d');
+function drawHud(f) {
+  // Original control: throttle = (294 - mouseY) * 200 on a 480-line screen; below y=294 is brake.
+  const W = 150, H = 150, sy = H/480, y = Math.min(480, 294 - f[K.throttle]/200) * sy;
+  thrC.clearRect(0,0,W,H);
+  thrC.fillStyle = '#2e7d32'; thrC.fillRect(40, 0, 70, 294*sy);
+  thrC.fillStyle = '#8e1b1b'; thrC.fillRect(40, 294*sy, 70, H - 294*sy);
+  thrC.fillStyle = '#ccc'; thrC.font = '10px monospace'; thrC.fillText('full', 4, 10); thrC.fillText('brake', 2, H-4);
+  const brake = f[K.throttle] < 1 && f[K.gear] > 0;
+  thrC.fillStyle = brake ? '#ff5252' : '#fff';
+  thrC.fillRect(34, (brake ? 294*sy + 6 : y) - 2, 82, 4);
+  thrC.fillText(String(Math.round(f[K.throttle])), 118, Math.max(10, Math.min(H-2, y + 4)));
+  const g = f[K.gear];
+  document.getElementById('gear').textContent = f[K.engine_started] ? (g ? g : 'N') : 'off';
+  rpmC.clearRect(0,0,150,14); rpmC.fillStyle = '#333'; rpmC.fillRect(0,0,150,14);
+  rpmC.fillStyle = f[K.rpm] > 40000 ? '#ff7043' : '#ffca28'; rpmC.fillRect(0,0,Math.max(0,f[K.rpm])/TMAX*150,14);
+}
+function draw() {
+  const W = cv.width = cv.clientWidth, H = cv.height = cv.clientHeight;
+  const f = F[i], scale = (+document.getElementById('zoom').value)/100 * W/16000;
+  cx.setTransform(scale,0,0,-scale, W/2 - f[K.x]*scale, H*0.55 + f[K.y]*scale);
+  cx.fillStyle = '#7a5530';
+  cx.beginPath(); cx.moveTo(P[0][0], -1e6);
+  for (let j=0;j<n;j++) cx.lineTo(P[j][0], P[j][1]);
+  cx.lineTo(P[n-1][0], -1e6); cx.closePath(); cx.fill();
+  cx.strokeStyle='#3a2a10'; cx.lineWidth=2/scale; cx.beginPath();
+  for (let j=0;j<n;j++) cx[j?'lineTo':'moveTo'](P[j][0], P[j][1]); cx.stroke();
+  const fr = D.bike.front_radius, rr = D.bike.rear_radius;
+  for (const g of (D.ghosts||[])) {
+    const s = ghostAt(g, f[K.race_time]); if (!s) continue;
+    drawBike(s[0],s[1],s[0]+s[2],s[1]+s[3],s[0]+s[4],s[1]+s[5],fr,rr,'rgba(40,40,140,0.5)','rgba(30,60,255,0.5)',null,null);
+  }
+  drawBike(f[K.x],f[K.y],f[K.fwx],f[K.fwy],f[K.rwx],f[K.rwy],fr,rr,'#c00','#222',f[K.wheel_angle_f],f[K.wheel_angle_r]);
+  cx.setTransform(1,0,0,1,0,0);
+  drawHud(f); drawStrip();
+  const kmh = (f[K.vx]/10/1e6*3600).toFixed(1);
+  document.getElementById('info').textContent =
+    `${D.track.label} [${D.physics||'original'} physics] frame ${i}/${F.length-1}  t=${(f[K.race_time]/1000).toFixed(3)}s  ` +
+    `state=${['waiting','countdown','racing'][f[K.state]]||f[K.state]}  lap=${f[K.laps_done]}/${D.track.laps}  ` +
+    `angle=${Math.round(f[K.angle_deg])}  speed=${kmh}km/h  crashes=${f[K.crashes]}` +
+    (D.finish_time ? `  | finish ${(D.finish_time/1000).toFixed(3)}s` : '');
+}
+function tick(ts) {
+  if (last!==null && playing) {
+    acc += (ts-last) * (+document.getElementById('spd').value);
+    while (acc >= frameMs) { acc -= frameMs; if (i < F.length-1) i++; else setPlaying(false); }
+  }
+  last = ts; draw(); requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => { stripImg = null; });
+requestAnimationFrame(tick);
+</script></body></html>

@@ -1,0 +1,127 @@
+# Struct definitions applied to the Ghidra project by Annotate.java.
+# STRUCT name size | FIELD offset type name [# comment] | PARAM funcaddr paramindex StructName  (param becomes StructName*)
+# types: int short byte ptr char[N] Struct[N] (previously defined struct)
+STRUCT Bike 0x1c8
+FIELD 0x00 ptr vptr
+FIELD 0x04 char[40] name
+FIELD 0x2c int playerType  # 1=local, 8=computer (gets auto-shift)
+FIELD 0x30 int ownWindow
+FIELD 0x3c int wheelColor
+FIELD 0x4c int x  # body CG, mm
+FIELD 0x50 int y  # mm, +y up
+FIELD 0x54 int frontWheelX
+FIELD 0x58 int frontWheelY
+FIELD 0x5c int rearWheelX
+FIELD 0x60 int rearWheelY
+FIELD 0x64 int angleDeg  # 0..359, 180 = level (front wheel at +x)
+FIELD 0x68 int engineStarted
+FIELD 0x6c int finishTime  # nonzero = out of race
+FIELD 0x70 short maxSeg
+FIELD 0x72 short lapsDone
+FIELD 0x74 short finishedOK  # 1 finished, 0 crashed out
+FIELD 0x78 int dispFrontR
+FIELD 0x7c int dispRearR
+FIELD 0x88 int frontRadius
+FIELD 0x8c int frontSpring
+FIELD 0x90 int frontRebound
+FIELD 0x94 int frontCompression
+FIELD 0x98 int frontTravel
+FIELD 0x9c int frontWheelMass
+FIELD 0xa0 int frontDist
+FIELD 0xa4 int frontHeight
+FIELD 0xa8 int rearRadius
+FIELD 0xac int rearSpring
+FIELD 0xb0 int rearRebound
+FIELD 0xb4 int rearCompression
+FIELD 0xb8 int rearTravel
+FIELD 0xbc int rearWheelMass
+FIELD 0xc0 int rearDist
+FIELD 0xc4 int rearHeight
+FIELD 0xc8 short rakeDeg
+FIELD 0xcc int bodyMass
+FIELD 0xd0 int power
+FIELD 0xd4 int brakePower
+FIELD 0xd8 short gearRatio0
+FIELD 0xda short gearRatio1
+FIELD 0xdc short gearRatio2
+FIELD 0xde short gearRatio3
+FIELD 0xe0 short gearRatio4
+FIELD 0xe2 short gearRatio5
+FIELD 0xe4 short autoTrans
+FIELD 0xe8 int vx
+FIELD 0xec int vy
+FIELD 0xf0 int frontSuspVel
+FIELD 0xf4 int rearSuspVel
+FIELD 0xf8 int frontExt  # 0..travel, travel = fully extended
+FIELD 0xfc int rearExt
+FIELD 0x100 int rpm
+FIELD 0x104 int frontSeg
+FIELD 0x108 int rearSeg
+FIELD 0x10c int thetaMrad
+FIELD 0x110 int omega
+FIELD 0x114 int rearWheelSpin
+FIELD 0x118 int frontR2
+FIELD 0x11c int rearR2
+FIELD 0x120 int inertia
+FIELD 0x124 int rearWheelInertia
+FIELD 0x128 int totalMass
+FIELD 0x12c int forkArmAngle
+FIELD 0x130 int forkArmLen
+FIELD 0x134 int forkAngleDeg
+FIELD 0x138 int throttle  # target rpm 0..58800; 0 = brake
+FIELD 0x13c int gear  # 0 neutral .. 5
+FIELD 0x140 int upKeyPrev
+FIELD 0x144 int downKeyPrev
+FIELD 0x148 int hasSound
+FIELD 0x14c int rearTouch
+FIELD 0x150 int frontTouch
+FIELD 0x154 ptr sound
+FIELD 0x158 char[100] fileSpec
+FIELD 0x1bc int dirty
+FIELD 0x1c0 int controlMode  # 0 mouse, 1 ZCSX, 2 M,.K
+FIELD 0x1c4 ptr recorder
+STRUCT TrackPt 8
+FIELD 0 int x
+FIELD 4 int y
+STRUCT Track 0x7e88
+FIELD 0x00 ptr vptr
+FIELD 0x04 short valid
+FIELD 0x06 char[226] description
+FIELD 0xe8 short laps
+FIELD 0xec short allowGetBack
+FIELD 0xf8 short nPoints
+FIELD 0xfc TrackPt[4000] pts
+FIELD 0x7dfe char[100] fileName
+FIELD 0x7e64 int seed
+FIELD 0x7e68 ptr scenery
+FIELD 0x7e6c ptr highScores0
+PARAM 10010a18 0 Bike
+PARAM 10010a18 4 Track
+PARAM 1001060c 0 Bike
+PARAM 1001395c 0 Bike
+PARAM 10017cc8 0 Bike
+PARAM 10017c40 0 Bike
+PARAM 10011c18 0 Bike
+PARAM 10011cf4 0 Bike
+PARAM 10011dd4 0 Bike
+PARAM 100102bc 0 Bike
+PARAM 100103a4 0 Bike
+PARAM 10013648 0 Bike
+PARAM 1001b698 0 Track
+PARAM 1001b3d0 0 Track
+STRUCT Game 0x264
+FIELD 0x00 ptr vptr
+FIELD 0x30 ptr timer
+FIELD 0x54 ptr windows
+FIELD 0x58 ptr bikes  # list
+FIELD 0x5c ptr track
+FIELD 0x64 int timeAcc  # dt units (us/83)
+FIELD 0x68 int substepsLeft
+FIELD 0x6c int raceStarted
+FIELD 0x70 int raceTime  # += dt/10 per substep
+FIELD 0x74 int countdown
+FIELD 0x78 int raceState  # 0 waiting for engines, 1 countdown, 2 racing, 3/4 paused/other
+FIELD 0x1e8 ptr statusWindow
+FIELD 0x260 int paused
+PARAM 1000df04 0 Game
+PARAM 1000dc54 0 Game
