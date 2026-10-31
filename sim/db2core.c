@@ -8,10 +8,10 @@
 #define DEG (M_PI / 180.0)
 #define TWO_PI_MRAD (2000.0 * M_PI)
 
-static Db2Config cfg = {50.0, 100.0, 50.0, 0.15, 1e9, 0.15, 0.10, 0.05, 1, 1, 1};
+static Db2Config cfg = {50.0, 100.0, 50.0, 0.15, 1e9, 0.15, 0.10, 0.05, 1, 1, 1, 1};
 
 void db2_default_config(Db2Config *c) {
-    Db2Config d = {50.0, 100.0, 50.0, 0.15, 1e9, 0.15, 0.10, 0.05, 1, 1, 1};
+    Db2Config d = {50.0, 100.0, 50.0, 0.15, 1e9, 0.15, 0.10, 0.05, 1, 1, 1, 1};
     *c = d;
 }
 void db2_set_config(const Db2Config *c) { cfg = *c; }
@@ -189,9 +189,11 @@ static int vertex_under(const DbTrack *t, double wx, double wy, double r) {
     return 1;
 }
 
-static void update_wheel_display(Db2Bike *b, const DbTrack *t, double dt, double fvt) {
+/* fvt, rvt: hub speeds along the ground (0.1 mm/s, signed). A touching wheel rolls with the ground (also
+ * backwards); in the air the rear follows the engine-driven spin and the front keeps its last rate. */
+static void update_wheel_display(Db2Bike *b, const DbTrack *t, double dt, double fvt, double rvt) {
     if (b->front_touch) b->wheel_rate_f = -(fvt / 10.0) / b->p.front_radius * 1e-4;
-    b->wheel_rate_r = -(b->rear_wheel_spin / 1e4) * 1e-4;
+    b->wheel_rate_r = b->rear_touch ? -(rvt / 10.0) / b->p.rear_radius * 1e-4 : -(b->rear_wheel_spin / 1e4) * 1e-4;
     b->wheel_angle_f = fmod(b->wheel_angle_f + b->wheel_rate_f * dt, 2 * M_PI);
     b->wheel_angle_r = fmod(b->wheel_angle_r + b->wheel_rate_r * dt, 2 * M_PI);
     (void)t;
@@ -241,6 +243,7 @@ int32_t db2_bike_step(Db2Bike *b, Db2Game *g, double dt, const DbTrack *t) {
     hub_velocity(b, b->rwx, b->rwy, sa, ca, b->rear_susp_vel, &hvx, &hvy);
     wheel_contact(t, &b->rear_seg, b->rwx, b->rwy, p->rear_radius, hvx, hvy, &rfx, &rfy);
     double rear_n = hypot(rfx, rfy);
+    double r_tan_vel = rear_n > 0 ? hvx * (rfy / rear_n) - hvy * (rfx / rear_n) : 0;
 
     if (!front_under && !rear_under) {
         if (p->auto_trans != 0 || b->player_type == DB_PLAYER_COMPUTER) auto_shift(b, g);
@@ -259,6 +262,15 @@ int32_t db2_bike_step(Db2Bike *b, Db2Game *g, double dt, const DbTrack *t) {
             tnx = rfy / rear_n;
             tny = -rfx / rear_n;
             double drive = torque, lim = cfg.mu * rear_n;
+            if (cfg.hold_brake && b->throttle < 1) {
+                /* orig: brake torque ~ -rpm, which is 0 when stopped or rolling backwards, so braking can't hold
+                 * the bike on a slope. Here the brake cancels the rolling speed and the downhill pull of gravity,
+                 * up to 2x brake power. */
+                drive = -(r_tan_vel * 10.0 * b->total_mass / dt) + 98.0 * b->total_mass * tny;
+                double fmax = 2.0 * p->brake_power;
+                if (drive > fmax) drive = fmax;
+                if (drive < -fmax) drive = -fmax;
+            }
             if (drive > lim) drive = lim;
             if (drive < -lim) drive = -lim;
             rfx += tnx * drive;
@@ -350,7 +362,7 @@ int32_t db2_bike_step(Db2Bike *b, Db2Game *g, double dt, const DbTrack *t) {
     b->fork_angle_deg = b->angle_deg - p->rake_deg;
     if (b->fork_angle_deg < 0) b->fork_angle_deg += 360;
     place_wheels(b);
-    update_wheel_display(b, t, dt, f_tan_vel);
+    update_wheel_display(b, t, dt, f_tan_vel, r_tan_vel);
     return b->finish_time != 0;
 }
 

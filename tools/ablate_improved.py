@@ -9,11 +9,12 @@ from dirtbike import sim as S
 from track_replay import track
 
 ORIGINAL_LIKE = dict(mu=1e9, contact_damping=0, tau_up=1e-6, tau_down=1e-6, tau_brake=1e-6,
-                     contact_continuous=0, rolling_rpm=0, surface_under=0)
+                     contact_continuous=0, rolling_rpm=0, surface_under=0, hold_brake=0)
 IMPROVEMENTS = {
     "mu": dict(mu=None), "contact_damping": dict(contact_damping=None),
     "engine_lag": dict(tau_up=None, tau_down=None, tau_brake=None),
     "contact_continuous": dict(contact_continuous=1), "rolling_rpm": dict(rolling_rpm=1), "surface_under": dict(surface_under=1),
+    "hold_brake": dict(hold_brake=1),
 }
 
 

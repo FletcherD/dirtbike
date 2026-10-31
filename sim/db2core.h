@@ -11,6 +11,7 @@
  *  - engine/rear wheel spin follows the throttle with a time constant when not driven by the ground
  *    (bounded gyration), rpm from the real rolling speed along the ground
  *  - "under ground" = wheel centre below the track surface; laps wrap by exact translation
+ *  - braking (throttle 0) holds the bike against rolling and gravity on slopes, up to 2x brake power
  * Units as in the original: mm (+y up), velocities 0.1 mm/s, dt in 0.1 ms, forces in 0.1 N,
  * theta in mrad (angle_deg 180 = level, front toward +x). */
 #ifndef DB2CORE_H
@@ -30,6 +31,7 @@ typedef struct {
     double contact_continuous; /* 0: per-vertex penalty sum (original), 1: segment integral */
     double rolling_rpm;        /* 0: rpm from vx+|vy| (0 if vx<=0), neutral wheel spin 0; 1: rolling speed along ground */
     double surface_under;      /* 0: "under" = no vertex in span below centre; 1: centre below surface */
+    double hold_brake;         /* 0: brake torque ~ -rpm (can't hold on slopes); 1: brake holds against rolling + gravity */
 } Db2Config;
 
 typedef struct {

@@ -133,7 +133,8 @@ segment-integral contact with the original's 50 mm stiffness; contact damping; d
 Euclidean norm (no slope penalty); traction unlimited like the original (optional cap `mu`: a realistic μ≈1 would
 keep only ~23% of the drive impulse humans use in the original, μ=20 ~89%, see `tools/calibrate_mu.py`); engine/wheel spin lags the throttle when not ground-driven (bounded gyration);
 rpm from rolling speed along the ground; "under ground" = centre below the surface; laps wrap by exact
-translation. `Db2Config` switches (`contact_continuous`, `rolling_rpm`, `surface_under`) and tunables can
+translation; braking (throttle 0) holds the bike against rolling and gravity up to 2× brake power (the original's
+brake ∝ −rpm is 0 when stopped or rolling backwards, so it creeps down slopes). `Db2Config` switches (`contact_continuous`, `rolling_rpm`, `surface_under`, `hold_brake`) and tunables can
 restore original behaviour piecewise. Known differences: no first dt=1 substep (starts 1 frame earlier);
 removing truncation alone already changes low-speed feel (faster creep, no suspension stiction), so human
 replays can't be tracked with it (`tools/ablate_improved.py`); same-input open-loop runs diverge within seconds.

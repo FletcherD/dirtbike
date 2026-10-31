@@ -216,15 +216,15 @@ static int wheel_contact(const DbTrack *t, int32_t *seg, int32_t wx, int32_t wy,
     return under;
 }
 
-/* Display-only wheel rotation (the original draws no spokes): rolling distance of a touching hub,
- * engine-driven spin for the rear wheel in gear, otherwise keep spinning at the last rate. */
+/* Display-only wheel rotation (the original draws no spokes): a touching wheel rolls with its hub's motion
+ * (also backwards); in the air the rear follows the engine-driven spin in gear, otherwise keeps its last rate. */
 static void update_wheel_display(DbBike *b, int32_t dt, int32_t ofx, int32_t ofy, int32_t orx, int32_t ory) {
     double dfx = b->fwx - ofx, dfy = b->fwy - ofy, drx = b->rwx - orx, dry = b->rwy - ory;
     if (dt > 0 && b->front_touch && fabs(dfx) < 1000) b->wheel_rate_f = -copysign(hypot(dfx, dfy), dfx) / b->p.front_radius / dt;
-    if (b->gear != 0)
-        b->wheel_rate_r = -(b->rear_wheel_spin / 1e4) * 1e-4;
-    else if (dt > 0 && b->rear_touch && fabs(drx) < 1000)
+    if (dt > 0 && b->rear_touch && fabs(drx) < 1000)
         b->wheel_rate_r = -copysign(hypot(drx, dry), drx) / b->p.rear_radius / dt;
+    else if (!b->rear_touch && b->gear != 0)
+        b->wheel_rate_r = -(b->rear_wheel_spin / 1e4) * 1e-4;
     b->wheel_angle_f = fmod(b->wheel_angle_f + b->wheel_rate_f * dt, 2 * M_PI);
     b->wheel_angle_r = fmod(b->wheel_angle_r + b->wheel_rate_r * dt, 2 * M_PI);
 }

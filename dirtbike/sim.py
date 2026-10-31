@@ -87,7 +87,7 @@ class Game2(C.Structure):
 
 
 CONFIG2_FIELDS = ["h", "contact_k", "contact_spacing", "contact_damping", "mu", "tau_up", "tau_down", "tau_brake",
-                  "contact_continuous", "rolling_rpm", "surface_under"]
+                  "contact_continuous", "rolling_rpm", "surface_under", "hold_brake"]
 
 
 class Config2(C.Structure):
