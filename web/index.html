@@ -22,7 +22,9 @@ button{cursor:pointer}button.go{background:#2e7d32;font-size:18px;padding:6px 22
 #desc{color:#ccc;font-style:italic;min-height:1.4em}
 #best{color:#ffd54f}
 #help{color:#999;font-size:12px;margin-top:8px}
-#editor{left:50%;top:50%;transform:translate(-50%,-50%);width:560px;max-width:96vw;max-height:92vh;overflow:auto;display:none}
+#editor{left:50%;top:50%;transform:translate(-50%,-50%);width:560px;max-width:96vw;max-height:92vh;overflow:auto;display:none;background:#151a26}
+#edpreview{display:block;width:100%;border-radius:6px;margin-bottom:4px}
+#edhint{color:#ffcc33;min-height:1.3em;margin-bottom:6px}
 #editor table{border-collapse:collapse;width:100%}
 #editor td{padding:2px 4px}#editor input{width:80px}
 .hidden{display:none!important}
@@ -68,6 +70,8 @@ button{cursor:pointer}button.go{background:#2e7d32;font-size:18px;padding:6px 22
 <div id="editor" class="panel">
  <h2 style="margin:0 0 6px">Edit Bike</h2>
  <div style="color:#999;font-size:12px;margin-bottom:6px">Values are the game's internal units (mm, kg, degrees; power/brake/gears unitless).</div>
+ <canvas id="edpreview" width="1072" height="440"></canvas>
+ <div id="edhint"></div>
  <table id="edtable"></table>
  <div class="row" style="margin-top:8px"><button id="edsave">Save as Custom Bike</button>
    <button id="edexpert">Load Expert</button><button id="edbeginner">Load Beginner</button><button id="edcancel">Cancel</button></div>

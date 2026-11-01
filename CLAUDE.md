@@ -174,7 +174,9 @@ play/pause, arrows step frames (shift ×10).
 block (`PARAM_NAMES`) into wasm memory, calls `_web_new_race(improved, 0)`, then per animation frame
 `_web_set_throttle`, `_web_advance(elapsed ms × 10)` and reads `_web_state()` (26 doubles, index map `S` in
 game.js / enum in webapi.c). Events (go, crash, lap, flip, bottom-out, finish) are detected by diffing states.
-Menu: track (samples, generated Beginner/Expert, random seed), bike (Expert/Beginner/Custom via the editor),
+Menu: track (samples, generated Beginner/Expert, random seed), bike (Expert/Beginner/Custom via the editor — opaque
+panel with a live `drawPreview` of the edited bike at level, highlighting the part the hovered/focused field
+changes; `editorParams` reads and clamps the fields),
 physics core, transmission, ghosts/sound/music. Best times + your best ghost in localStorage per
 track/physics/bike. Rendering reuses the viewer's bike/wheel/HUD code plus a rider modelled on sprite 143 that leans like the original
 sprites (`riderLean`: 0 near level/inverted, up to 22° forward when nose-up / back when nose-down; torso pivots at

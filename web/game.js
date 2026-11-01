@@ -13,7 +13,8 @@ const PARAM_NAMES = ['front_radius', 'front_spring', 'front_rebound', 'front_com
 const EXPERT_SEED = 0x25dd37d2, BEGINNER_SEED = 0x5b694da2;
 
 const $ = id => document.getElementById(id);
-const cv = $('game'), cx = cv.getContext('2d');
+const cv = $('game'), gameCtx = cv.getContext('2d');
+let cx = gameCtx; // drawing functions draw into cx; the bike editor's preview swaps it temporarily
 let M = null;            // wasm module
 let track = null;        // {id, name, description, laps, allowGetBack, pts:[[x,y]], ghosts, path}
 let race = null;         // per-race state
@@ -583,23 +584,24 @@ const ED_ROWS = [['Wheel Radius (mm)', 0, 8], ['Wheel Weight (kg)', 5, 13], ['Su
 function openEditor() {
   const p = presetParams($('bike').value);
   fillEditor(p);
+  $('menu').classList.add('hidden');
   $('editor').style.display = 'block';
+  drawPreview();
 }
 function fillEditor(p) {
   const num = (i) => `<input type="number" data-i="${i}" value="${p[i]}">`;
-  let h = '<tr><td></td><td><b>Front</b></td><td><b>Rear</b></td></tr>';
-  for (const [label, f, r] of ED_ROWS) h += `<tr><td>${label}</td><td>${num(f)}</td><td>${num(r)}</td></tr>`;
-  h += `<tr><td>Rake Angle (deg)</td><td>${num(16)}</td></tr><tr><td>Bike Weight (kg)</td><td>${num(17)}</td></tr>`;
+  // rear column first, matching the preview (rear wheel on the left)
+  let h = '<tr><td></td><td><b>Rear</b></td><td><b>Front</b></td></tr>';
+  for (const [label, f, r] of ED_ROWS) h += `<tr><td>${label}</td><td>${num(r)}</td><td>${num(f)}</td></tr>`;
+  h += `<tr><td>Rake Angle (deg)</td><td></td><td>${num(16)}</td></tr><tr><td>Bike Weight (kg)</td><td>${num(17)}</td></tr>`;
   h += `<tr><td>Bike Power</td><td>${num(18)}</td></tr><tr><td>Brake Power</td><td>${num(19)}</td></tr>`;
   h += `<tr><td>Gear Ratios 1–5</td><td colspan="2">${[21, 22, 23, 24, 25].map(num).join(' ')}</td></tr>`;
   $('edtable').innerHTML = h;
   $('edtable').dataset.base = JSON.stringify(Array.from(p));
+  drawPreview();
 }
-function closeEditor() { $('editor').style.display = 'none'; }
-$('edcancel').onclick = closeEditor;
-$('edexpert').onclick = () => fillEditor(presetParams('expert'));
-$('edbeginner').onclick = () => fillEditor(presetParams('beginner'));
-$('edsave').onclick = () => {
+function closeEditor() { $('editor').style.display = 'none'; $('menu').classList.remove('hidden'); }
+function editorParams() {
   const p = JSON.parse($('edtable').dataset.base);
   for (const el of $('edtable').querySelectorAll('input')) {
     let v = Math.round(+el.value);
@@ -608,7 +610,80 @@ $('edsave').onclick = () => {
     if (i === 16) v = Math.max(0, Math.min(80, v));
     p[i] = v;
   }
-  store.set('customBike', p);
+  return p;
+}
+
+// ---- bike preview with the part a field applies to highlighted
+const ED_LABELS = {0: 'Front wheel radius', 8: 'Rear wheel radius', 5: 'Front wheel weight', 13: 'Rear wheel weight',
+  4: 'Front suspension travel', 12: 'Rear suspension travel', 1: 'Front spring rate', 9: 'Rear spring rate',
+  3: 'Front compression damping', 11: 'Rear compression damping', 2: 'Front rebound damping', 10: 'Rear rebound damping',
+  6: 'Front wheel distance from C.G.', 14: 'Rear wheel distance from C.G.', 7: 'Front height to C.G.', 15: 'Rear height to C.G.',
+  16: 'Rake angle', 17: 'Bike weight (at the C.G.)', 18: 'Engine power', 19: 'Brake power (rear brake)',
+  21: '1st gear ratio', 22: '2nd gear ratio', 23: '3rd gear ratio', 24: '4th gear ratio', 25: '5th gear ratio'};
+let edHover = null, edFocus = null;
+$('edtable').addEventListener('mouseover', e => { if (e.target.dataset.i) { edHover = +e.target.dataset.i; drawPreview(); } });
+$('edtable').addEventListener('mouseout', e => { if (e.target.dataset.i) { edHover = null; drawPreview(); } });
+$('edtable').addEventListener('focusin', e => { if (e.target.dataset.i) { edFocus = +e.target.dataset.i; drawPreview(); } });
+$('edtable').addEventListener('focusout', () => { edFocus = null; drawPreview(); });
+$('edtable').addEventListener('input', () => drawPreview());
+function drawPreview() {
+  const pc = $('edpreview'), ctx = pc.getContext('2d'), W = pc.width, H = pc.height;
+  const p = editorParams(), hl = edHover !== null ? edHover : edFocus;
+  // bike at level (the game's geometry at angle 180) with the suspension at 80% of its travel, C.G. at the origin
+  const [fr, fd, fh, ft, rr, rd, rh, rt, rake] = [p[0], p[6], p[7], p[4], p[8], p[14], p[15], p[12], p[16]];
+  const sr = Math.sin(rake * Math.PI / 180), crk = Math.cos(rake * Math.PI / 180);
+  const fdir = [sr, -crk], ftop = [fd, 0], rtop = [-rd, 0];
+  const along = (top, dir, l) => [top[0] + dir[0] * l, top[1] + dir[1] * l];
+  const fw = along(ftop, fdir, fh + 0.8 * ft), rw = along(rtop, [0, -1], rh + 0.8 * rt);
+  const xmin = rw[0] - rr - 350, xmax = fw[0] + fr + 350, ymin = Math.min(fw[1] - fr, rw[1] - rr) - 200, ymax = 1300;
+  const k = Math.min(W / (xmax - xmin), H / (ymax - ymin));
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#cfe9ff'; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(k, 0, 0, -k, W / 2 - (xmin + xmax) / 2 * k, H / 2 + (ymin + ymax) / 2 * k);
+  ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 40; ctx.beginPath();
+  ctx.moveTo(xmin, rw[1] - rr); ctx.lineTo(rw[0], rw[1] - rr); ctx.lineTo(fw[0], fw[1] - fr); ctx.lineTo(xmax, fw[1] - fr); ctx.stroke();
+  cx = ctx;
+  drawBike(0, 0, fw[0], fw[1], rw[0], rw[1], fr, rr, PLAYER_STYLE, 0.3, 0.3);
+  cx = gameCtx;
+  if (hl !== null && ED_LABELS[hl]) {
+    const front = [0, 1, 2, 3, 4, 5, 6, 7].includes(hl), hub = front ? fw : rw, R = front ? fr : rr;
+    const top = front ? ftop : rtop, dir = front ? fdir : [0, -1], ht = front ? fh : rh, tr = front ? ft : rt;
+    ctx.strokeStyle = ctx.fillStyle = 'rgba(255,190,0,0.85)'; ctx.lineCap = 'round'; ctx.lineWidth = 60;
+    const seg = (a, b) => { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); };
+    const dimension = (a, b) => { ctx.lineWidth = 30; seg(a, b); for (const q of [a, b]) { ctx.beginPath(); ctx.arc(...q, 50, 0, 7); ctx.fill(); } };
+    if (hl === 0 || hl === 8) { ctx.lineWidth = 70; ctx.beginPath(); ctx.arc(...hub, R - 20, 0, 7); ctx.stroke(); }
+    else if (hl === 5 || hl === 13) { ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(...hub, R, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    else if (hl === 4 || hl === 12) { ctx.lineWidth = 90; seg(along(top, dir, ht), along(top, dir, ht + tr)); }
+    else if ([1, 2, 3, 9, 10, 11].includes(hl)) {               // shock: spring zigzag along the suspension
+      const a = along(top, dir, ht * 0.4), b = hub, n = [-dir[1], dir[0]], steps = 12;
+      ctx.lineWidth = 35; ctx.beginPath(); ctx.moveTo(...a);
+      for (let j = 1; j < steps; j++) {
+        const u = j / steps, w = (j % 2 ? 1 : -1) * 90;
+        ctx.lineTo(a[0] + (b[0] - a[0]) * u + n[0] * w, a[1] + (b[1] - a[1]) * u + n[1] * w);
+      }
+      ctx.lineTo(...b); ctx.stroke();
+    } else if (hl === 6 || hl === 14) dimension([0, 0], top);
+    else if (hl === 7 || hl === 15) dimension(top, along(top, dir, ht));
+    else if (hl === 16) {
+      ctx.lineWidth = 70; seg(ftop, fw);
+      ctx.lineWidth = 30; ctx.beginPath(); ctx.arc(...ftop, 450, -Math.PI / 2, -Math.PI / 2 + rake * Math.PI / 180); ctx.stroke();
+      ctx.setLineDash([60, 60]); seg(ftop, [ftop[0], ftop[1] - 600]); ctx.setLineDash([]);
+    } else if (hl === 17) { ctx.lineWidth = 40; ctx.beginPath(); ctx.arc(0, 0, 160, 0, 7); ctx.stroke(); }
+    else if (hl === 18) { ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.ellipse(20, -90, 320, 240, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    else if (hl === 19) { ctx.lineWidth = 45; ctx.beginPath(); ctx.arc(...rw, rr * 0.45, 0, 7); ctx.stroke(); }
+    else if (hl >= 21 && hl <= 25) {                            // chain from the engine sprocket to the rear wheel
+      const sp = [-80, -180]; ctx.lineWidth = 30;
+      seg([sp[0], sp[1] + 70], [rw[0], rw[1] + 160]); seg([sp[0], sp[1] - 70], [rw[0], rw[1] - 160]);
+      ctx.beginPath(); ctx.arc(...sp, 70, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(...rw, 160, 0, 7); ctx.stroke();
+    }
+  }
+  $('edhint').textContent = hl !== null && ED_LABELS[hl] ? ED_LABELS[hl] : 'Hover over or edit a value to see what it changes.';
+}
+$('edcancel').onclick = closeEditor;
+$('edexpert').onclick = () => fillEditor(presetParams('expert'));
+$('edbeginner').onclick = () => fillEditor(presetParams('beginner'));
+$('edsave').onclick = () => {
+  store.set('customBike', editorParams());
   $('bike').value = 'custom';
   closeEditor(); updateMenu();
 };
